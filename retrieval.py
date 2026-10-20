@@ -90,34 +90,54 @@ if document_embeddings is None:
     print("Embedding cache saved.")
 
 
+
+
 def decompose_query(question):
 
-     prompt = f"""
-     Break the user's question into independent, simple questions
-     that can be answered separately using a business knowledge base.
+    question_lower = question.lower().strip()
 
-     Rules:
-     - Return one question per line.
-     - If the question asks for only one thing, return it unchanged.
-     - Do not answer the questions.
-     - Do not add numbering or explanations.
+    # Common indicators of multiple information needs
+    multi_part_indicators = [
+        " and ",
+        "also ",
+        " as well as ",
+        " in addition to ",
+        "but "
+    ]
 
-     User question: {question}
-     """
+    # Skip Gemini decomposition for likely single-part questions
+    if not any(
+        indicator in question_lower
+        for indicator in multi_part_indicators
+    ):
+        return [question]
 
-     response = client.models.generate_content(
-         model = "gemini-2.5-flash",
-         contents = prompt
-     )
+    prompt = f"""
+    Break the user's question into independent, simple questions
+    that can be answered separately using a business knowledge base.
 
-     sub_questions = [
-         line.strip()
-         for line in response.text.splitlines()
+    Rules:
+    - Return one question per line.
+    - Do not split a question if it asks for only one thing.
+    - Do not answer the questions.
+    - Do not add numbering or explanations.
 
-         if line.strip()
-     ]
+    User question: {question}
+    """
 
-     return sub_questions or [question]
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+
+    sub_questions = [
+        line.strip().lstrip("0123456789.-) ")
+        for line in response.text.splitlines()
+        if line.strip()
+    ]
+
+    return sub_questions or [question]
+
 
 
 
@@ -217,7 +237,7 @@ def retrieve_document(question):
 
 if __name__ == "__main__":
 
-    question = "What is the Python course duration, and what is the refund deadline?"
+    question = "How much does the Python Programming course cost?"
 
     document, score = retrieve_document(question)
 
