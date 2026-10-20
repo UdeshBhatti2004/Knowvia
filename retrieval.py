@@ -89,6 +89,38 @@ if document_embeddings is None:
 
     print("Embedding cache saved.")
 
+
+def decompose_query(question):
+
+     prompt = f"""
+     Break the user's question into independent, simple questions
+     that can be answered separately using a business knowledge base.
+
+     Rules:
+     - Return one question per line.
+     - If the question asks for only one thing, return it unchanged.
+     - Do not answer the questions.
+     - Do not add numbering or explanations.
+
+     User question: {question}
+     """
+
+     response = client.models.generate_content(
+         model = "gemini-2.5-flash",
+         contents = prompt
+     )
+
+     sub_questions = [
+         line.strip()
+         for line in response.text.splitlines()
+
+         if line.strip()
+     ]
+
+     return sub_questions or [question]
+
+
+
 def cosine_similarity(vector_a, vector_b):
     a = np.array(vector_a)
     b = np.array(vector_b)
@@ -104,48 +136,82 @@ def cosine_similarity(vector_a, vector_b):
 
 def retrieve_document(question):
 
-    question_embedding = get_embedding(question)
+    sub_questions = decompose_query(question)
 
-    document_scores =  []
+    print("\n--- Decomposed Questions ---")
+    for sub_question in sub_questions:
+        print("-", sub_question)
 
+    best_documents = {}
 
-    for document, document_embedding in zip(
-        knowledge_base, document_embeddings
-    ):
-        score = cosine_similarity(
-            question_embedding,
-            document_embedding
+    threshold = 0.60
+
+    for sub_question in sub_questions:
+        question_embedding = get_embedding(sub_question)
+
+        document_scores = []
+
+        for document, document_embedding in zip(
+            knowledge_base, document_embeddings
+        ):
+            score = cosine_similarity(
+                question_embedding,
+                document_embedding
+            )
+
+            document_scores.append((document, score))
+
+        document_scores.sort(
+            key=lambda item: item[1],
+            reverse=True
         )
 
-        document_scores.append((document,score))
+        print(f"\n--- Retrieval scores for: {sub_question} ---")
 
-    document_scores.sort( key = lambda item : item[1] , reverse=True )
+        for document, score in document_scores:
+            print(
+                f"Score: {score:.4f} | "
+                f"Source: {document['source']} | "
+                f"Text: {document['text'][:120]}"
+            )
 
-    print("\n--- All retrieval scores ---")
+        for document, score in document_scores:
+            if score < threshold:
+                continue
 
-    for document, score in document_scores:
+            # Use source, page, and text to identify duplicate chunks.
+            key = (
+                document["source"],
+                document["page"],
+                document["text"]
+            )
+
+            # Keep the highest score if the same chunk is retrieved again.
+            if (
+                key not in best_documents
+                or score > best_documents[key][1]
+            ):
+                best_documents[key] = (document, score)
+
+    relevant_documents = sorted(
+        best_documents.values(),
+        key=lambda item: item[1],
+        reverse=True
+    )
+
+    print("\n--- Combined Retrieval Results ---")
+    for document, score in relevant_documents:
         print(
             f"Score: {score:.4f} | "
             f"Source: {document['source']} | "
             f"Text: {document['text'][:120]}"
         )
-
-    print("----------------------------\n")
-
-    threshold = 0.60
-
-    relevant_documents = [
-        ( document , score)
-        for document , score in document_scores
-        if score >= threshold
-    ]
+    print("----------------------------------\n")
 
     if not relevant_documents:
-        return None , document_scores[0][1]
+        return None, 0.0
 
-    
-
-    return relevant_documents[ : 3] , relevant_documents[0][1]
+    return relevant_documents[:3], relevant_documents[0][1]
 
 
 
@@ -164,3 +230,10 @@ if __name__ == "__main__":
          print("Matching document:", doc["text"])
          print("Similarity score:", round(score, 4))
          print()
+
+
+    sub_questions = decompose_query(question)
+
+    print("\nDecomposed questions:")
+    for sub_question in sub_questions:
+        print("-", sub_question)
