@@ -195,23 +195,26 @@ def retrieve_document(question):
                 f"Text: {document['text'][:120]}"
             )
 
-        for document, score in document_scores:
-            if score < threshold:
-                continue
+        
+        selected_documents = [
+            (document, score)
+            for document, score in document_scores
+            if score >= threshold
+        ][:2]
 
-            # Use source, page, and text to identify duplicate chunks.
+        for document, score in selected_documents:
             key = (
                 document["source"],
                 document["page"],
                 document["text"]
             )
 
-            # Keep the highest score if the same chunk is retrieved again.
             if (
                 key not in best_documents
                 or score > best_documents[key][1]
             ):
                 best_documents[key] = (document, score)
+
 
     relevant_documents = sorted(
         best_documents.values(),
@@ -237,7 +240,7 @@ def retrieve_document(question):
 
 if __name__ == "__main__":
 
-    question = "How much does the Python Programming course cost?"
+    question = "What is the Python course duration, and what is the refund deadline?"
 
     document, score = retrieve_document(question)
 
