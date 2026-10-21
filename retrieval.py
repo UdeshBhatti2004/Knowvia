@@ -8,6 +8,8 @@ from chunking import chunk_pages
 import pickle
 import hashlib
 import glob
+import time
+from google.genai import errors
 
 load_dotenv()
 
@@ -44,11 +46,31 @@ knowledge_base = chunk_pages(
  )
 
 def get_embedding(text):
-    result = client.models.embed_content(
-        model=embedding_model,
-        contents=text
-    )
-    return result.embeddings[0].values
+
+    max_attempts = 3
+
+    for attempt in range(max_attempts):
+        try:
+            result = client.models.embed_content(
+                    model=embedding_model,
+                    contents=text
+                )
+            return result.embeddings[0].values
+
+        except errors.APIError as e :
+
+            print(
+                f" Gemini Embedding Failed",
+                f"(attempt {attempt + 1}): {e}"
+                )
+
+            if e.code not in ( 429 , 500 , 502 , 503 , 504 ):
+                raise
+
+            if attempt == max_attempts - 1:
+                raise
+
+            time.sleep( 2 ** attempt)  
 
 
 if os.path.exists(cache_file):
