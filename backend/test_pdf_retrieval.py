@@ -2,13 +2,16 @@ import os
 import numpy as np 
 from dotenv import load_dotenv
 from google import genai
-
+from pathlib import Path
 from read_pdf import extract_text_from_pdf
 from chunking import chunk_pages
 
-# Load API key 
+# Load API key
+# 
+BACKEND_DIR = Path(__file__).resolve().parent 
 
-load_dotenv()
+load_dotenv(BACKEND_DIR.parent / ".env")
+
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
@@ -38,7 +41,10 @@ def cosine_similarity( vector_a , vector_b):
 
 # Read the Pdf and create chunks 
 
-pages = extract_text_from_pdf("documents/business_info.pdf")
+pages = extract_text_from_pdf(
+    BACKEND_DIR / "documents" / "business_info.pdf"
+)
+
 chunks = chunk_pages(pages , chunk_size=250 , overlap=40)
 
 # Genrate and store eachc chunk's embeddings

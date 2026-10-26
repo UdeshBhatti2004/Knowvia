@@ -1,9 +1,10 @@
 
 from read_pdf import extract_text_from_pdf
 from chunking import chunk_pages
+from pathlib import Path
 
-pdf_path = "documents/business_info.pdf"
 
+pdf_path = Path(__file__).resolve().parent / "documents" / "business_info.pdf"
 # Step 1 : Extract text from pdf
 
 pages = extract_text_from_pdf(pdf_path)
