@@ -1,36 +1,47 @@
 
-import os
 import glob
-import time
 import hashlib
-from pathlib import Path
+import os
+import time
+import threading
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 
 import numpy as np
-from dotenv import load_dotenv
-from google import genai
 from google.genai import errors
 
-from read_pdf import extract_text_from_pdf
-from chunking import chunk_pages
-from cache_manager import get_or_create_embeddings
+from app.core.ai_client import client
+from app.core.config import (
+    CACHE_FILE,
+    DOCUMENTS_DIR,
+)
+from app.knowledge.pdf_reader import extract_text_from_pdf
+from app.knowledge.chunking import chunk_pages
+from app.knowledge.cache_manager import get_or_create_embeddings
 
-
-BACKEND_DIR = Path(__file__).resolve().parent
-DOCUMENTS_DIR = BACKEND_DIR / "documents"
-CACHE_FILE = str(BACKEND_DIR / "documents_embedding.pkl")
-
-load_dotenv(BACKEND_DIR.parent / ".env")
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 embedding_model = "gemini-embedding-2"
 chunk_size = 500
 chunk_overlap = 50
 
-knowledge_base = []
-document_embeddings = []
-pdf_hashes = {}
-pdf_modified_time = {}
+
+@dataclass(frozen=True)
+class KnowledgeBaseState:
+    knowledge_base: tuple[Mapping[str, object], ...]
+    document_embeddings: tuple[tuple[float, ...], ...]
+    pdf_hashes: Mapping[str, str]
+    pdf_modified_time: Mapping[str, float]
+
+
+knowledge_base_state = KnowledgeBaseState(
+    knowledge_base=(),
+    document_embeddings=(),
+    pdf_hashes=MappingProxyType({}),
+    pdf_modified_time=MappingProxyType({}),
+)
+refresh_lock = threading.Lock()
 
 
 def get_embedding(text):
@@ -60,60 +71,66 @@ def get_embedding(text):
 
 
 def refresh_knowledge_base():
-    global knowledge_base
-    global document_embeddings
-    global pdf_hashes
-    global pdf_modified_time
+    global knowledge_base_state
 
-    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    with refresh_lock:
+        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    pdf_paths = sorted(
-        glob.glob(str(DOCUMENTS_DIR / "*.pdf"))
-    )
+        pdf_paths = sorted(
+            glob.glob(str(DOCUMENTS_DIR / "*.pdf"))
+        )
 
-    current_hashes = {}
-    current_modified_times = {}
+        current_hashes = {}
+        current_modified_times = {}
 
-    for path in pdf_paths:
-        with open(path, "rb") as file:
-            current_hashes[path] = hashlib.sha256(
-                file.read()
-            ).hexdigest()
+        for path in pdf_paths:
+            with open(path, "rb") as file:
+                current_hashes[path] = hashlib.sha256(
+                    file.read()
+                ).hexdigest()
 
-        current_modified_times[path] = os.path.getmtime(path)
+            current_modified_times[path] = os.path.getmtime(path)
 
-    pages = []
+        pages = []
 
-    for path in pdf_paths:
-        pages.extend(extract_text_from_pdf(path))
+        for path in pdf_paths:
+            pages.extend(extract_text_from_pdf(path))
 
-    new_knowledge_base = chunk_pages(
-        pages,
-        chunk_size=chunk_size,
-        overlap=chunk_overlap,
-    )
+        new_knowledge_base = chunk_pages(
+            pages,
+            chunk_size=chunk_size,
+            overlap=chunk_overlap,
+        )
 
-    new_embeddings = get_or_create_embeddings(
-        cache_file=CACHE_FILE,
-        pdf_hashes=current_hashes,
-        embedding_model=embedding_model,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        knowledge_base=new_knowledge_base,
-        get_embedding=get_embedding,
-        pdf_modified_times=current_modified_times,
-    )
+        new_embeddings = get_or_create_embeddings(
+            cache_file=CACHE_FILE,
+            pdf_hashes=current_hashes,
+            embedding_model=embedding_model,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            knowledge_base=new_knowledge_base,
+            get_embedding=get_embedding,
+            pdf_modified_times=current_modified_times,
+        )
 
-    knowledge_base = new_knowledge_base
-    document_embeddings = new_embeddings
-    pdf_hashes = current_hashes
-    pdf_modified_time = current_modified_times
+        refreshed_state = KnowledgeBaseState(
+            knowledge_base=tuple(
+                MappingProxyType(document.copy())
+                for document in new_knowledge_base
+            ),
+            document_embeddings=tuple(
+                tuple(embedding) for embedding in new_embeddings
+            ),
+            pdf_hashes=MappingProxyType(current_hashes),
+            pdf_modified_time=MappingProxyType(current_modified_times),
+        )
+        knowledge_base_state = refreshed_state
 
-    print(
-        f"Knowledge base refreshed: "
-        f"{len(pdf_paths)} PDF(s), "
-        f"{len(knowledge_base)} chunk(s)."
-    )
+        print(
+            f"Knowledge base refreshed: "
+            f"{len(pdf_paths)} PDF(s), "
+            f"{len(refreshed_state.knowledge_base)} chunk(s)."
+        )
 
 
 refresh_knowledge_base()
@@ -179,6 +196,8 @@ def cosine_similarity(vector_a, vector_b):
 
 
 def retrieve_document(question):
+    state = knowledge_base_state
+
     # Detect newly uploaded, changed, or deleted PDFs.
     current_paths = sorted(
         glob.glob(str(DOCUMENTS_DIR / "*.pdf"))
@@ -192,11 +211,12 @@ def retrieve_document(question):
                 file.read()
             ).hexdigest()
 
-    if current_hashes != pdf_hashes:
+    if current_hashes != state.pdf_hashes:
         print("PDF collection changed. Refreshing knowledge base...")
         refresh_knowledge_base()
+        state = knowledge_base_state
 
-    if not knowledge_base or not document_embeddings:
+    if not state.knowledge_base or not state.document_embeddings:
         return None, 0.0
 
     sub_questions = decompose_query(question)
@@ -213,8 +233,8 @@ def retrieve_document(question):
         document_scores = []
 
         for document, document_embedding in zip(
-            knowledge_base,
-            document_embeddings,
+            state.knowledge_base,
+            state.document_embeddings,
         ):
             score = cosine_similarity(
                 question_embedding,

@@ -1,8 +1,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from read_pdf import extract_text_from_pdf
-from chunking import chunk_text, chunk_pages
+from app.knowledge.pdf_reader import extract_text_from_pdf
+from app.knowledge.chunking import chunk_text, chunk_pages
 
 import pytest
 
@@ -14,7 +14,7 @@ def test_extract_text_from_pdf():
     fake_reader = MagicMock()
     fake_reader.pages = [fake_page]
 
-    with patch("read_pdf.PdfReader", return_value=fake_reader):
+    with patch("app.knowledge.pdf_reader.PdfReader", return_value=fake_reader):
         result = extract_text_from_pdf("documents/sample.pdf")
 
     assert len(result) == 1
@@ -38,7 +38,7 @@ def test_skips_empty_pages():
     fake_reader = MagicMock()
     fake_reader.pages = [empty_page, blank_page, valid_page]
 
-    with patch("read_pdf.PdfReader", return_value=fake_reader):
+    with patch("app.knowledge.pdf_reader.PdfReader", return_value=fake_reader):
         result = extract_text_from_pdf("documents/sample.pdf")
 
     assert len(result) == 1
@@ -60,7 +60,7 @@ def test_extracts_multiple_pages_in_order():
     fake_reader = MagicMock()
     fake_reader.pages = [page1, page2, page3]
 
-    with patch("read_pdf.PdfReader", return_value=fake_reader):
+    with patch("app.knowledge.pdf_reader.PdfReader", return_value=fake_reader):
         result = extract_text_from_pdf("documents/business_info.pdf")
 
     assert len(result) == 3
@@ -122,4 +122,6 @@ def test_rejects_invalid_overlap():
         match="Overlap must be non-negative and smaller than chunk size",
     ):
         chunk_text("Some text", chunk_size=100, overlap=100)
+
+
 

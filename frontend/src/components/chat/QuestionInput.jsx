@@ -31,6 +31,9 @@ function QuestionInput({
 }
 
 function handleKeyDown(event) {
+  const nativeEvent = event.nativeEvent
+  if (nativeEvent.isComposing || nativeEvent.keyCode === 229) return
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
 

@@ -1,22 +1,28 @@
 
-# Environment variables
+# Environment variables and secrets
 .env
+.env.*
 
-# Virtual environment
+# Python virtual environments
 venv/
 .venv/
+backend/venv/
 
-# Python cache
+# Python generated files
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 
 # Embedding cache
 documents_embedding.pkl
+backend/documents_embedding.pkl
 
-# Business documents
+# Uploaded business documents
 documents/
+backend/documents/
 
-# IDE and OS files
+# IDE and operating system files
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db

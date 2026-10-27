@@ -1,8 +1,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { FileText, RefreshCw, Search } from 'lucide-react'
-
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../services/api'
 
 function formatSize(bytes) {
   if (typeof bytes !== 'number') return '—'

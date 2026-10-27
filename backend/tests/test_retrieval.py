@@ -1,4 +1,4 @@
-from retrieval import retrieve_document
+from app.knowledge.retrieval import retrieve_document
 
 def test_retrieve_refund_policy():
 
@@ -42,4 +42,5 @@ def test_multi_part_question():
 
     assert "3 months" in combined_text
     assert "7 days" in combined_text
+
 

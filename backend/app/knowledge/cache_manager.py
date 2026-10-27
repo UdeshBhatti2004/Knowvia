@@ -1,5 +1,9 @@
 
-from cache_utils import is_cache_valid, load_cache, save_cache
+from app.knowledge.cache_utils import (
+    is_cache_valid,
+    load_cache,
+    save_cache,
+)
 
 
 def get_or_create_embeddings(
@@ -14,12 +18,15 @@ def get_or_create_embeddings(
 ):
     cached_data = load_cache(cache_file)
 
-    if is_cache_valid(
-        cached_data or {},
-        pdf_hashes,
-        embedding_model,
-        chunk_size,
-        chunk_overlap,
+    if (
+        is_cache_valid(
+            cached_data or {},
+            pdf_hashes,
+            embedding_model,
+            chunk_size,
+            chunk_overlap,
+        )
+        and len(cached_data["embeddings"]) == len(knowledge_base)
     ):
         return cached_data["embeddings"]
 

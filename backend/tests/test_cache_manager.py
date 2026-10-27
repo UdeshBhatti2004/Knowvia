@@ -1,5 +1,5 @@
 
-from cache_manager import get_or_create_embeddings
+from app.knowledge.cache_manager import get_or_create_embeddings
 
 
 def test_valid_cache_reuses_embeddings(tmp_path):
@@ -8,7 +8,7 @@ def test_valid_cache_reuses_embeddings(tmp_path):
     expected_embeddings = [[0.1, 0.2, 0.3]]
 
     # Create an existing valid cache.
-    from cache_utils import save_cache
+    from app.knowledge.cache_utils import save_cache
 
     save_cache(
         cache_file,
@@ -64,7 +64,7 @@ def test_missing_cache_generates_and_saves_embeddings(tmp_path):
 def test_changed_pdf_hash_regenerates_embeddings(tmp_path):
     cache_file = tmp_path / "cache.pkl"
 
-    from cache_utils import save_cache
+    from app.knowledge.cache_utils import save_cache
 
     save_cache(
         cache_file,
@@ -96,3 +96,45 @@ def test_changed_pdf_hash_regenerates_embeddings(tmp_path):
 
     assert result == generated_embeddings
     assert calls == ["Updated document"]
+
+
+def test_mismatched_cache_embedding_count_regenerates_embeddings(tmp_path):
+    cache_file = tmp_path / "cache.pkl"
+    pdf_hashes = {"sample.pdf": "hash123"}
+
+    from app.knowledge.cache_utils import save_cache
+
+    save_cache(
+        cache_file,
+        {
+            "embeddings": [[0.1, 0.2, 0.3]],
+            "pdf_hashes": pdf_hashes,
+            "embedding_model": "gemini-embedding-2",
+            "chunk_size": 500,
+            "chunk_overlap": 50,
+        },
+    )
+
+    knowledge_base = [
+        {"text": "First document"},
+        {"text": "Second document"},
+    ]
+    calls = []
+
+    def fake_embedding(text):
+        calls.append(text)
+        return [0.4, 0.5, 0.6]
+
+    result = get_or_create_embeddings(
+        str(cache_file),
+        pdf_hashes,
+        "gemini-embedding-2",
+        500,
+        50,
+        knowledge_base,
+        fake_embedding,
+    )
+
+    assert result == [[0.4, 0.5, 0.6], [0.4, 0.5, 0.6]]
+    assert calls == ["First document", "Second document"]
+

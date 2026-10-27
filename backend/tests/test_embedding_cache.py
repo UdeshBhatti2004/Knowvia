@@ -2,7 +2,7 @@
 import pickle
 import pytest
 
-from cache_utils import is_cache_valid, load_cache, save_cache
+from app.knowledge.cache_utils import is_cache_valid, load_cache, save_cache
 
 
 @pytest.fixture
@@ -87,3 +87,4 @@ def test_cache_without_embeddings_is_invalid(valid_cache_data):
         500,
         50,
     ) is False
+

@@ -21,6 +21,7 @@ function AssistantSetupPage() {
           <input
             id="assistant-name"
             type="text"
+            readOnly
             placeholder="Knowvia Assistant"
             className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/50 sm:w-3/4"
           />
@@ -36,6 +37,7 @@ function AssistantSetupPage() {
           <textarea
             id="welcome-message"
             rows={3}
+            readOnly
             placeholder="How can I help you today?"
             className="w-full resize-y rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm leading-6 text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/50 sm:w-3/4"
           />
@@ -51,6 +53,7 @@ function AssistantSetupPage() {
           <textarea
             id="fallback-message"
             rows={2}
+            readOnly
             placeholder="I couldn't find that information in our business documents."
             className="w-full resize-y rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm leading-6 text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/50 sm:w-3/4"
           />

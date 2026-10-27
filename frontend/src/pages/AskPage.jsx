@@ -2,8 +2,7 @@
 import { useState } from 'react'
 import QuestionInput from '../components/chat/QuestionInput'
 import AnswerCard from '../components/answers/AnswerCard'
-
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../services/api'
 
 const suggestions = [
   'What courses do we offer?',

@@ -1,6 +1,17 @@
 from unittest.mock import patch
 
-import retrieval
+import app.knowledge.retrieval as retrieval
+
+
+def patched_state(document, embedding):
+    current_state = retrieval.knowledge_base_state
+    return retrieval.KnowledgeBaseState(
+        knowledge_base=(document,),
+        document_embeddings=(tuple(embedding),),
+        pdf_hashes=current_state.pdf_hashes,
+        pdf_modified_time=current_state.pdf_modified_time,
+    )
+
 
 def test_retrieve_refund_policy_without_gemini():
 
@@ -25,13 +36,8 @@ def test_retrieve_refund_policy_without_gemini():
          ),
          patch.object(
              retrieval,
-             "knowledge_base",
-             [fake_document],
-         ),
-         patch.object(
-             retrieval,
-             "document_embeddings",
-             [[1.0, 0.0]],
+             "knowledge_base_state",
+             patched_state(fake_document, [1.0, 0.0]),
          ),
     ):
         results, highest_score = retrieval.retrieve_document(
@@ -66,13 +72,8 @@ def test_rejects_documents_below_threshold():
         ),
         patch.object(
             retrieval,
-            "knowledge_base",
-            [fake_document],
-        ),
-        patch.object(
-            retrieval,
-            "document_embeddings",
-            [[0.0,1.0]],
+            "knowledge_base_state",
+            patched_state(fake_document, [0.0, 1.0]),
         ),
     ):
 
@@ -108,13 +109,8 @@ def test_duplicate_documents_are_removed():
         ),
         patch.object(
             retrieval,
-            "knowledge_base",
-            [fake_document],
-        ),
-        patch.object(
-            retrieval,
-            "document_embeddings",
-            [[1.0, 0.0]],
+            "knowledge_base_state",
+            patched_state(fake_document, [1.0, 0.0]),
         ),
      ):
 

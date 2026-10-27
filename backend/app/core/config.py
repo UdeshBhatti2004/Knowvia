@@ -1,0 +1,31 @@
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+# Project paths
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = BACKEND_DIR.parent
+
+# Load environment variables from the project root
+load_dotenv(PROJECT_ROOT / ".env")
+
+# Application settings
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY was not found. "
+        "Check the .env file in the project root."
+    )
+
+# Storage paths
+DOCUMENTS_DIR = BACKEND_DIR / "documents"
+CACHE_FILE = BACKEND_DIR / "documents_embedding.pkl"
+SOURCES_METADATA_FILE = DOCUMENTS_DIR / "sources_metadata.json"
+
+# Upload settings
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
