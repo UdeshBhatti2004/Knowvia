@@ -1,8 +1,7 @@
-
 from fastapi import APIRouter, HTTPException
 import time
 from app.schemas.question import QuestionRequest
-from app.services.answer_service import generate_answer
+from app.services.answer_service import AnswerQuotaExceeded, generate_answer
 from app.services.knowledge_service import retrieve_knowledge
 
 
@@ -59,6 +58,15 @@ def ask_question(request: QuestionRequest):
         started = time.perf_counter()
         answer = generate_answer(request.question, context)
         print(f"[timing] answer generation: {time.perf_counter() - started:.2f}s")
+    except AnswerQuotaExceeded as exc:
+        print(f"Answer limit reached: {exc}")
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "The daily answer limit has been reached. "
+                "Please try again later."
+            ),
+        ) from exc
     except Exception as exc:
         print(f"Answer generation failed: {exc}")
         raise HTTPException(

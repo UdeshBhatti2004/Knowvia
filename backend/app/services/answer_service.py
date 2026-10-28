@@ -1,9 +1,19 @@
-
 import time
 
 from google.genai import errors
 
 from app.core.ai_client import client
+
+
+class AnswerQuotaExceeded(Exception):
+    """The daily limit for answer generation has been used up."""
+
+
+def _is_daily_quota_error(exc) -> bool:
+    # Google names the daily limit in the error text ("...PerDay..." in the
+    # quota id, "requests per day" in the description). Retrying cannot help.
+    text = str(exc).lower().replace(" ", "")
+    return exc.code == 429 and "perday" in text
 
 
 def generate_answer(question: str, context: str) -> str:
@@ -48,6 +58,11 @@ def generate_answer(question: str, context: str) -> str:
                 f"Gemini generation failed "
                 f"(attempt {attempt + 1}): {exc}"
             )
+
+            if _is_daily_quota_error(exc):
+                raise AnswerQuotaExceeded(
+                    "Daily Gemini answer limit reached."
+                ) from exc
 
             if exc.code not in (429, 500, 502, 503, 504):
                 raise

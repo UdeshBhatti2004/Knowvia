@@ -6,13 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.ask import router as ask_router
 from app.api.routes.sources import router as sources_router
 from app.knowledge.retrieval import refresh_knowledge_base
+from app.knowledge.startup import stop_retrying, warm_up
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs once when the server starts, not when the module is imported.
-    refresh_knowledge_base()
+    # A failed build (for example a rate limit) no longer stops the server.
+    retry_task = await warm_up(refresh_knowledge_base)
     yield
+    await stop_retrying(retry_task)
 
 
 def create_app() -> FastAPI:
@@ -39,4 +42,3 @@ def create_app() -> FastAPI:
     return app
 
 app = create_app()
-
