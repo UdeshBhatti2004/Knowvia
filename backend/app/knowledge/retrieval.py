@@ -133,9 +133,6 @@ def refresh_knowledge_base():
         )
 
 
-refresh_knowledge_base()
-
-
 def decompose_query(question):
     question_lower = question.lower().strip()
 
@@ -194,27 +191,8 @@ def cosine_similarity(vector_a, vector_b):
 
     return float(np.dot(a, b) / denominator)
 
-
 def retrieve_document(question):
     state = knowledge_base_state
-
-    # Detect newly uploaded, changed, or deleted PDFs.
-    current_paths = sorted(
-        glob.glob(str(DOCUMENTS_DIR / "*.pdf"))
-    )
-
-    current_hashes = {}
-
-    for path in current_paths:
-        with open(path, "rb") as file:
-            current_hashes[path] = hashlib.sha256(
-                file.read()
-            ).hexdigest()
-
-    if current_hashes != state.pdf_hashes:
-        print("PDF collection changed. Refreshing knowledge base...")
-        refresh_knowledge_base()
-        state = knowledge_base_state
 
     if not state.knowledge_base or not state.document_embeddings:
         return None, 0.0
@@ -298,21 +276,3 @@ def retrieve_document(question):
     return relevant_documents[:3], relevant_documents[0][1]
 
 
-if __name__ == "__main__":
-    question = (
-        "What is the Python course duration, "
-        "and what is the refund deadline?"
-    )
-
-    documents, score = retrieve_document(question)
-
-    print("Question:", question)
-
-    if documents is None:
-        print("No relevant document found.")
-    else:
-        for doc, doc_score in documents:
-            print("Matching document:", doc["text"])
-            print("Source:", doc["source"])
-            print("Similarity score:", round(doc_score, 4))
-            print()
