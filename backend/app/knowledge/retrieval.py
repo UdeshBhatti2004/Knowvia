@@ -1,4 +1,3 @@
-
 import glob
 import hashlib
 import os
@@ -6,6 +5,7 @@ import time
 import threading
 
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -163,10 +163,14 @@ def decompose_query(question):
     User question: {question}
     """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=prompt,
+        )
+    except Exception as exc:
+        print(f"Query decomposition failed, using original question: {exc}")
+        return [question]
 
     if not response.text:
         return [question]
@@ -191,6 +195,7 @@ def cosine_similarity(vector_a, vector_b):
 
     return float(np.dot(a, b) / denominator)
 
+
 def retrieve_document(question):
     state = knowledge_base_state
 
@@ -203,11 +208,16 @@ def retrieve_document(question):
     for sub_question in sub_questions:
         print("-", sub_question)
 
+    # Embed all sub-questions at the same time instead of one by one.
+    with ThreadPoolExecutor(max_workers=len(sub_questions)) as pool:
+        vectors = list(pool.map(get_embedding, sub_questions))
+    embeddings = dict(zip(sub_questions, vectors))
+
     best_documents = {}
     threshold = 0.60
 
     for sub_question in sub_questions:
-        question_embedding = get_embedding(sub_question)
+        question_embedding = embeddings[sub_question]
         document_scores = []
 
         for document, document_embedding in zip(
@@ -274,5 +284,3 @@ def retrieve_document(question):
         return None, 0.0
 
     return relevant_documents[:3], relevant_documents[0][1]
-
-

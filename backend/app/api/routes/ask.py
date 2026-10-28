@@ -1,7 +1,6 @@
 
 from fastapi import APIRouter, HTTPException
-
-
+import time
 from app.schemas.question import QuestionRequest
 from app.services.answer_service import generate_answer
 from app.services.knowledge_service import retrieve_knowledge
@@ -13,7 +12,9 @@ router = APIRouter()
 @router.post("/ask")
 def ask_question(request: QuestionRequest):
     try:
+        started = time.perf_counter()
         documents, _ = retrieve_knowledge(request.question)
+        print(f"[timing] retrieval: {time.perf_counter() - started:.2f}s")
     except Exception as exc:
         print(f"Document retrieval failed: {exc}")
         raise HTTPException(
@@ -55,7 +56,9 @@ def ask_question(request: QuestionRequest):
     )
 
     try:
+        started = time.perf_counter()
         answer = generate_answer(request.question, context)
+        print(f"[timing] answer generation: {time.perf_counter() - started:.2f}s")
     except Exception as exc:
         print(f"Answer generation failed: {exc}")
         raise HTTPException(
