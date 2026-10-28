@@ -1,6 +1,5 @@
-
-
 import asyncio
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +15,21 @@ from app.repositories.source_repository import (
     save_sources_metadata,
 )
 from app.knowledge.retrieval import refresh_knowledge_base
+
+
+def _find_duplicate(content_hash: str) -> str | None:
+    """Return the name of a stored PDF with exactly this content, if any."""
+    if not DOCUMENTS_DIR.is_dir():
+        return None
+
+    for path in DOCUMENTS_DIR.iterdir():
+        if not path.is_file() or path.suffix.lower() != ".pdf":
+            continue
+
+        if hashlib.sha256(path.read_bytes()).hexdigest() == content_hash:
+            return path.name
+
+    return None
 
 
 async def upload_source(file: UploadFile) -> dict:
@@ -41,6 +55,20 @@ async def upload_source(file: UploadFile) -> dict:
         raise HTTPException(
             status_code=413,
             detail="PDF files must be 10 MB or smaller.",
+        )
+
+    duplicate_name = await asyncio.to_thread(
+        _find_duplicate,
+        hashlib.sha256(content).hexdigest(),
+    )
+
+    if duplicate_name:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This PDF has already been uploaded "
+                f'as "{duplicate_name}".'
+            ),
         )
 
     destination = DOCUMENTS_DIR / Path(file.filename).name
@@ -98,6 +126,57 @@ async def upload_source(file: UploadFile) -> dict:
     return {
         "message": "PDF uploaded successfully.",
         **record,
+    }
+
+
+async def delete_source(filename: str) -> dict:
+    # Only a plain "name.pdf" is accepted: no folders, no "..", no other types.
+    safe_name = Path(filename).name
+
+    if (
+        not filename
+        or safe_name != filename
+        or Path(filename).suffix.lower() not in ALLOWED_UPLOAD_EXTENSIONS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file name.",
+        )
+
+    target = DOCUMENTS_DIR / safe_name
+
+    if not target.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    content = target.read_bytes()
+    target.unlink()
+
+    try:
+        await asyncio.to_thread(refresh_knowledge_base)
+    except Exception as exc:
+        # Put the file back so the knowledge base and the folder agree.
+        target.write_bytes(content)
+        print(f"Failed to refresh knowledge base after delete: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete the document. Please try again.",
+        ) from exc
+
+    # The file is gone and search is updated. A leftover metadata entry is
+    # harmless (the list only shows files that exist), so don't fail on it.
+    try:
+        metadata = load_sources_metadata()
+        if metadata.pop(safe_name, None) is not None:
+            save_sources_metadata(metadata)
+    except Exception as exc:
+        print(f"Failed to remove source metadata: {exc}")
+
+    return {
+        "message": "Document deleted.",
+        "filename": safe_name,
     }
 
 

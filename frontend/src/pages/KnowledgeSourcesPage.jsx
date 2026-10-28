@@ -1,4 +1,3 @@
-
 import { useRef, useState } from 'react'
 import { FileText, Plus, Upload, X } from 'lucide-react'
 import { API_URL } from '../services/api'
@@ -9,14 +8,20 @@ function KnowledgeSourcesPage() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [notice, setNotice] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+
+  function clearMessages() {
+    setError('')
+    setSuccess('')
+    setNotice('')
+  }
 
   function processFile(file) {
     if (!file) return
 
-    setError('')
-    setSuccess('')
+    clearMessages()
 
     if (
       file.type !== 'application/pdf' &&
@@ -40,8 +45,7 @@ function KnowledgeSourcesPage() {
     if (!selectedFile || isUploading) return
 
     setIsUploading(true)
-    setError('')
-    setSuccess('')
+    clearMessages()
 
     try {
       const formData = new FormData()
@@ -55,7 +59,17 @@ function KnowledgeSourcesPage() {
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Upload failed. Please try again.')
+        const message = data.detail || 'Upload failed. Please try again.'
+
+        // 409 means the document is already in the knowledge base
+        // (same content, or same file name). That is not a failure.
+        if (response.status === 409) {
+          setNotice(message)
+          setSelectedFile(null)
+          return
+        }
+
+        throw new Error(message)
       }
 
       setSuccess(`${data.filename || selectedFile.name} uploaded successfully.`)
@@ -78,14 +92,13 @@ function KnowledgeSourcesPage() {
     if (isUploading) return
 
     setSelectedFile(null)
-    setError('')
-    setSuccess('')
+    clearMessages()
   }
 
   function handleAddSource() {
     if (isUploading) return
 
-    setError('')
+    clearMessages()
     fileInputRef.current?.click()
   }
 
@@ -136,6 +149,12 @@ function KnowledgeSourcesPage() {
         </p>
       )}
 
+      {notice && (
+        <p role="status" className="mt-4 text-sm text-amber-400">
+          {notice}
+        </p>
+      )}
+
       {success && (
         <p role="status" className="mt-4 text-sm text-emerald-400">
           {success}
@@ -155,7 +174,10 @@ function KnowledgeSourcesPage() {
 
             <p className="mt-1 text-xs text-zinc-500">
               {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-              {' · '}Ready to upload
+              {' · '}
+              {isUploading
+                ? 'Processing, this can take a minute for large files'
+                : 'Ready to upload'}
             </p>
           </div>
 
