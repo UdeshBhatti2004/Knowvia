@@ -12,7 +12,7 @@ def generate_answer(question: str, context: str) -> str:
     for attempt in range(max_attempts):
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash-lite",
                 contents=f"""
                 You are a polite, professional, and helpful AI assistant for a business knowledge base.
 

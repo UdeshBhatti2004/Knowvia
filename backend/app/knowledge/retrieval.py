@@ -245,7 +245,7 @@ def retrieve_document(question):
 
         print(f"\n--- Retrieval scores for: {sub_question} ---")
 
-        for document, score in document_scores:
+        for document, score in document_scores[:5]:
             print(
                 f"Score: {score:.4f} | "
                 f"Source: {document['source']} | "
@@ -256,7 +256,7 @@ def retrieve_document(question):
             (document, score)
             for document, score in document_scores
             if score >= threshold
-        ][:2]
+        ][:3]
 
         for document, score in selected_documents:
             key = (
