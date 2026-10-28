@@ -1,9 +1,10 @@
 
 from fastapi import APIRouter, HTTPException
 
-from backend.app.schemas.question import QuestionRequest
-from backend.app.services.answer_service import generate_answer
-from backend.app.services.knowledge_service import retrieve_knowledge
+
+from app.schemas.question import QuestionRequest
+from app.services.answer_service import generate_answer
+from app.services.knowledge_service import retrieve_knowledge
 
 
 router = APIRouter()
