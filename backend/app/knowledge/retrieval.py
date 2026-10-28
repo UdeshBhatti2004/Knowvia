@@ -102,6 +102,7 @@ def refresh_knowledge_base():
             overlap=chunk_overlap,
         )
 
+        started = time.perf_counter()
         new_embeddings = get_or_create_embeddings(
             cache_file=CACHE_FILE,
             pdf_hashes=current_hashes,
@@ -111,6 +112,13 @@ def refresh_knowledge_base():
             knowledge_base=new_knowledge_base,
             get_embedding=get_embedding,
             pdf_modified_times=current_modified_times,
+            max_workers=4,
+            requests_per_minute=90,
+        )
+
+        print(
+            f"[timing] embeddings: {time.perf_counter() - started:.2f}s "
+            f"for {len(new_knowledge_base)} chunks"
         )
 
         refreshed_state = KnowledgeBaseState(

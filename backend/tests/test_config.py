@@ -1,5 +1,5 @@
 
-from backend.app.core.config import (
+from app.core.config import (
     BACKEND_DIR,
     PROJECT_ROOT,
     DOCUMENTS_DIR,
