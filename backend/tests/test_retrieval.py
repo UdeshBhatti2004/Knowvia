@@ -87,6 +87,28 @@ def test_multi_part_question():
     assert "7 days" in combined_text
 
 
+
+def test_duplicate_documents_are_removed(monkeypatch):
+    # Two sub-questions that both match the same chunk.
+    monkeypatch.setattr(
+        retrieval,
+        "decompose_query",
+        lambda question: [
+            "What is the refund deadline?",
+            "Can I request a refund?",
+        ],
+    )
+
+    documents, highest_score = retrieval.retrieve_document(
+        "What is the refund deadline and can I request a refund?"
+    )
+
+    assert documents is not None
+    assert len(documents) == 1
+    assert documents[0][0]["source"] == "business_info.pdf"
+
+
+
 def test_empty_knowledge_base_returns_nothing(monkeypatch):
     empty = retrieval.KnowledgeBaseState(
         knowledge_base=(),
