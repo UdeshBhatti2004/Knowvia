@@ -32,7 +32,7 @@ function App() {
         return <OverviewPage onNavigate={handleNavigate} />
 
       case 'Knowledge Sources':
-        return <KnowledgeSourcesPage />
+        return <KnowledgeSourcesPage onNavigate={handleNavigate} />
 
       case 'Uploaded Documents':
         return <UploadedDocumentsPage />

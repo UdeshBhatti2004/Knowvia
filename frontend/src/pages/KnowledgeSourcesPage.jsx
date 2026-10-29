@@ -1,8 +1,23 @@
 import { useRef, useState } from 'react'
-import { FileText, Plus, Upload, X } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileText,
+  Info,
+  Plus,
+  Upload,
+  X,
+} from 'lucide-react'
 import { API_URL } from '../services/api'
 
-function KnowledgeSourcesPage() {
+const uploadIdeas = [
+  'Course details and fees',
+  'Class schedules and timings',
+  'Refund and cancellation policy',
+  'FAQs and contact information',
+]
+
+function KnowledgeSourcesPage({ onNavigate }) {
   const fileInputRef = useRef(null)
 
   const [selectedFile, setSelectedFile] = useState(null)
@@ -72,13 +87,11 @@ function KnowledgeSourcesPage() {
         throw new Error(message)
       }
 
-      // CHANGED: the server now replies as soon as the file is saved, and
-      // embeds it in the background. So we say "received", not "uploaded
-      // successfully", and point the user to the page that shows progress.
+      // The server replies as soon as the file is saved and embeds it in
+      // the background, so we say "received", not "uploaded successfully".
       setSuccess(
         `${data.filename || selectedFile.name} received. ` +
-          'It is being processed in the background. ' +
-          'Check the Uploaded Documents page to follow its progress.'
+          'It is being processed in the background.'
       )
       setSelectedFile(null)
     } catch (err) {
@@ -102,7 +115,7 @@ function KnowledgeSourcesPage() {
     clearMessages()
   }
 
-  function handleAddSource() {
+  function openFilePicker() {
     if (isUploading) return
 
     clearMessages()
@@ -118,29 +131,37 @@ function KnowledgeSourcesPage() {
     }
   }
 
+  function handleZoneKeyDown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openFilePicker()
+    }
+  }
+
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+      {/* Header */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-medium tracking-tight text-zinc-100">
             Knowledge Sources
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Your business documents in one place.
+          <p className="mt-1 text-sm text-zinc-500">
+            The documents your assistant answers from.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={handleAddSource}
+          onClick={openFilePicker}
           disabled={isUploading}
-          className="flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Plus size={16} />
+          <Plus size={14} />
           <span className="hidden sm:inline">Add source</span>
           <span className="sm:hidden">Add</span>
         </button>
-      </div>
+      </header>
 
       <input
         ref={fileInputRef}
@@ -150,117 +171,165 @@ function KnowledgeSourcesPage() {
         className="hidden"
       />
 
+      {/* Messages */}
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-400">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="mt-5 flex items-start gap-2.5 rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-3 text-sm text-red-300"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <p className="min-w-0 break-words">{error}</p>
+        </div>
       )}
 
       {notice && (
-        <p role="status" className="mt-4 text-sm text-amber-400">
-          {notice}
-        </p>
+        <div
+          role="status"
+          className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-300"
+        >
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <p className="min-w-0 break-words">{notice}</p>
+        </div>
       )}
 
       {success && (
-        <p role="status" className="mt-4 text-sm text-emerald-400">
-          {success}
-        </p>
+        <div
+          role="status"
+          className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-300"
+        >
+          <CheckCircle2 size={16} className="shrink-0" />
+          <p className="min-w-0 flex-1 basis-48 break-words">{success}</p>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('Uploaded Documents')}
+              className="shrink-0 text-xs font-medium text-emerald-200 underline-offset-2 transition hover:underline"
+            >
+              View progress
+            </button>
+          )}
+        </div>
       )}
 
-      {selectedFile ? (
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-white/[0.08] py-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
-            <FileText size={20} className="text-violet-400" />
-          </div>
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Upload area */}
+        <div className="min-w-0 lg:col-span-2">
+          {selectedFile ? (
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <p className="text-xs text-zinc-500">Ready to upload</p>
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-zinc-200">
-              {selectedFile.name}
-            </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                  <FileText size={20} className="text-violet-400" />
+                </div>
 
-            <p className="mt-1 text-xs text-zinc-500">
-              {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-              {' \u00b7 '}
-              {/* CHANGED: the upload itself is quick now, so the old
-                  "this can take a minute" text no longer fits. */}
-              {isUploading ? 'Uploading...' : 'Ready to upload'}
-            </p>
-          </div>
+                <div className="min-w-0 flex-1 basis-40">
+                  <p className="truncate text-sm font-medium text-zinc-200">
+                    {selectedFile.name}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                    {' \u00b7 '}
+                    {isUploading ? 'Uploading...' : 'PDF'}
+                  </p>
+                </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRemoveFile}
-              disabled={isUploading}
-              aria-label="Remove selected file"
-              className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
-            >
-              <X size={16} />
-            </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRemoveFile}
+                    disabled={isUploading}
+                    aria-label="Remove selected file"
+                    className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+                  >
+                    <X size={16} />
+                  </button>
 
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={isUploading}
-              className="flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isUploading && (
-                <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              )}
-              {isUploading ? 'Uploading...' : 'Upload PDF'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-1 items-start justify-center pt-16 sm:pt-24">
-          <div
-            onDragOver={(event) => {
-              event.preventDefault()
-              setIsDragging(true)
-            }}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                setIsDragging(false)
-              }
-            }}
-            onDrop={handleDrop}
-            className={`flex w-full flex-col items-center rounded-xl border border-dashed px-5 py-12 text-center transition-colors sm:py-16 ${
-              isDragging
-                ? 'border-violet-400 bg-violet-500/10'
-                : 'border-white/10 bg-white/[0.015]'
-            }`}
-          >
-            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-violet-500/10">
-              <Upload size={22} className="text-violet-400" />
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isUploading && (
+                      <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    )}
+                    {isUploading ? 'Uploading...' : 'Upload PDF'}
+                  </button>
+                </div>
+              </div>
             </div>
-
-            <h2 className="text-sm font-medium text-zinc-200">
-              No documents selected
-            </h2>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Add a PDF to your business knowledge base.
-            </p>
-
-            <button
-              type="button"
-              onClick={handleAddSource}
-              className="mt-5 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.05] hover:text-white"
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Select a PDF to upload"
+              onClick={openFilePicker}
+              onKeyDown={handleZoneKeyDown}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setIsDragging(true)
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setIsDragging(false)
+                }
+              }}
+              onDrop={handleDrop}
+              className={`flex cursor-pointer flex-col items-center rounded-xl border border-dashed px-5 py-12 text-center outline-none transition-colors focus-visible:border-violet-400 sm:py-16 ${
+                isDragging
+                  ? 'border-violet-400 bg-violet-500/10'
+                  : 'border-white/10 bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.03]'
+              }`}
             >
-              <Plus size={15} />
-              Select PDF
-            </button>
+              <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-violet-500/10">
+                <Upload size={22} className="text-violet-400" />
+              </div>
 
-            <p className="mt-3 text-xs text-zinc-500">
-              PDF files only {'\u00b7'} Maximum 10 MB
-            </p>
-            <p className="mt-1 text-xs text-zinc-600">
-              or drag and drop a file here
-            </p>
-          </div>
+              <h2 className="text-sm font-medium text-zinc-200">
+                {isDragging ? 'Drop your PDF here' : 'Drag a PDF here'}
+              </h2>
+
+              <p className="mt-1.5 text-sm text-zinc-500">
+                or click to choose a file from your computer
+              </p>
+
+              <p className="mt-4 text-xs text-zinc-600">
+                PDF only {'\u00b7'} up to 10 MB {'\u00b7'} one file at a time
+              </p>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Guidance */}
+        <aside className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <h2 className="text-sm font-medium text-zinc-200">
+            What to upload
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Anything your customers ask about often.
+          </p>
+
+          <ul className="mt-3 space-y-2">
+            {uploadIdeas.map((idea) => (
+              <li
+                key={idea}
+                className="flex items-start gap-2 text-sm text-zinc-300"
+              >
+                <CheckCircle2
+                  size={15}
+                  className="mt-0.5 shrink-0 text-violet-300"
+                />
+                {idea}
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-4 border-t border-white/[0.07] pt-3 text-xs leading-5 text-zinc-500">
+            Uploading the same file twice is skipped automatically.
+          </p>
+        </aside>
+      </div>
     </section>
   )
 }
