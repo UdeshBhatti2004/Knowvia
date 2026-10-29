@@ -1,4 +1,3 @@
-
 # Environment variables and secrets
 .env
 .env.*
@@ -17,9 +16,18 @@ __pycache__/
 documents_embedding.pkl
 backend/documents_embedding.pkl
 
-# Uploaded business documents
+# Uploaded business documents (includes sources_metadata.json)
 documents/
 backend/documents/
+
+# Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# Logs
+*.log
 
 # IDE and operating system files
 .vscode/
