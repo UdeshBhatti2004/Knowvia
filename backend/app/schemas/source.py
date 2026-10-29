@@ -1,7 +1,10 @@
-
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
+
+# The only allowed values for a source's status.
+SourceStatus = Literal["Processing", "Processed", "Failed"]
 
 
 class SourceMetadata(BaseModel):
@@ -11,7 +14,7 @@ class SourceMetadata(BaseModel):
     size: int
     uploaded_at: datetime
     timestamp_is_estimated: bool
-    status: str
+    status: SourceStatus
 
 
 class SourceListResponse(BaseModel):
