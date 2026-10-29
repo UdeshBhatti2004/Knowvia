@@ -75,6 +75,56 @@ def _remove_record(name: str, only_if_failed: bool = False) -> bool:
         return True
 
 
+
+def recover_interrupted_uploads(started_at: datetime) -> int:
+    """Fix records left in "Processing" by a crash or restart.
+
+    Call this only AFTER a successful knowledge-base refresh. The refresh
+    embeds every PDF in the documents folder, so:
+      - PDF still on disk  -> it was embedded -> "Processed"
+      - PDF missing        -> nothing to use   -> "Failed" (user can clear it)
+
+    Only records uploaded BEFORE started_at are touched. A newer "Processing"
+    record belongs to a live background job, which will set its own status.
+    Returns how many records were changed.
+    """
+    changed = 0
+
+    with metadata_lock:
+        metadata = load_sources_metadata()
+
+        for name, record in metadata.items():
+            if record.get("status") != "Processing":
+                continue
+
+            try:
+                uploaded_at = datetime.fromisoformat(record["uploaded_at"])
+            except (KeyError, TypeError, ValueError):
+                # No usable timestamp: it cannot be a live job, so recover it.
+                uploaded_at = None
+            else:
+                if uploaded_at.tzinfo is None:
+                    # No timezone stored. Every timestamp this app writes is
+                    # UTC, so assume UTC instead of crashing on the compare.
+                    uploaded_at = uploaded_at.replace(tzinfo=timezone.utc)
+
+            if uploaded_at is not None and uploaded_at >= started_at:
+                continue
+
+            exists = (DOCUMENTS_DIR / name).is_file()
+            metadata[name] = {
+                **record,
+                "status": "Processed" if exists else "Failed",
+            }
+            changed += 1
+
+        if changed:
+            save_sources_metadata(metadata)
+
+    return changed
+
+
+
 def _find_duplicate(content_hash: str) -> str | None:
     """Return the name of a stored PDF with exactly this content, if any."""
     if not DOCUMENTS_DIR.is_dir():

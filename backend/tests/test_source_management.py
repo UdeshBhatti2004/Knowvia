@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException, UploadFile
@@ -279,3 +280,86 @@ def test_upload_route_returns_processing_then_finishes(tmp_path):
     # ...and the test client runs background jobs before returning, so by
     # now the job has finished too.
     assert storage.store["second.pdf"]["status"] == "Processed"
+
+
+
+def _processing_record(name, uploaded_at):
+    return {
+        "filename": name,
+        "size": 10,
+        "uploaded_at": uploaded_at.isoformat(),
+        "timestamp_is_estimated": False,
+        "status": "Processing",
+    }
+
+
+def test_recovery_marks_processed_when_pdf_still_exists(tmp_path):
+    started_at = datetime.now(timezone.utc)
+    old = started_at - timedelta(hours=1)
+    (tmp_path / "a.pdf").write_bytes(PDF_A)
+    store = {"a.pdf": _processing_record("a.pdf", old)}
+
+    with fake_storage(tmp_path, store):
+        changed = source_service.recover_interrupted_uploads(started_at)
+
+    assert changed == 1
+    assert store["a.pdf"]["status"] == "Processed"
+
+
+def test_recovery_marks_failed_when_pdf_is_missing(tmp_path):
+    started_at = datetime.now(timezone.utc)
+    old = started_at - timedelta(hours=1)
+    store = {"gone.pdf": _processing_record("gone.pdf", old)}
+
+    with fake_storage(tmp_path, store):
+        changed = source_service.recover_interrupted_uploads(started_at)
+
+    assert changed == 1
+    assert store["gone.pdf"]["status"] == "Failed"
+
+
+def test_recovery_leaves_newer_processing_records_alone(tmp_path):
+    started_at = datetime.now(timezone.utc)
+    newer = started_at + timedelta(minutes=1)
+    (tmp_path / "live.pdf").write_bytes(PDF_B)
+    store = {"live.pdf": _processing_record("live.pdf", newer)}
+
+    with fake_storage(tmp_path, store):
+        changed = source_service.recover_interrupted_uploads(started_at)
+
+    assert changed == 0
+    assert store["live.pdf"]["status"] == "Processing"
+
+
+def test_recovery_ignores_records_that_are_not_processing(tmp_path):
+    started_at = datetime.now(timezone.utc)
+    old = started_at - timedelta(hours=1)
+    done = {**_processing_record("done.pdf", old), "status": "Processed"}
+    store = {"done.pdf": done}
+
+    with fake_storage(tmp_path, store):
+        changed = source_service.recover_interrupted_uploads(started_at)
+
+    assert changed == 0
+    assert store["done.pdf"]["status"] == "Processed"
+
+
+
+
+def test_recovery_handles_timestamps_without_a_timezone(tmp_path):
+    started_at = datetime.now(timezone.utc)
+    old_naive = (started_at - timedelta(hours=1)).replace(tzinfo=None)
+    new_naive = (started_at + timedelta(minutes=1)).replace(tzinfo=None)
+    (tmp_path / "old.pdf").write_bytes(PDF_A)
+    (tmp_path / "live.pdf").write_bytes(PDF_B)
+    store = {
+        "old.pdf": _processing_record("old.pdf", old_naive),
+        "live.pdf": _processing_record("live.pdf", new_naive),
+    }
+
+    with fake_storage(tmp_path, store):
+        changed = source_service.recover_interrupted_uploads(started_at)
+
+    assert changed == 1
+    assert store["old.pdf"]["status"] == "Processed"
+    assert store["live.pdf"]["status"] == "Processing"

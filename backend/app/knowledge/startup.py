@@ -5,7 +5,22 @@ from contextlib import suppress
 RETRY_DELAYS = (65, 65, 65, 65, 65)
 
 
-async def _retry_in_background(refresh, delays):
+def _run_on_ready(on_ready):
+    """Run the optional "knowledge base is ready" hook.
+
+    A problem in the hook is only logged. The knowledge base itself is
+    fine at this point, so it must not trigger another retry.
+    """
+    if on_ready is None:
+        return
+
+    try:
+        on_ready()
+    except Exception as exc:
+        print(f"Post-startup recovery failed: {exc}")
+
+
+async def _retry_in_background(refresh, delays, on_ready=None):
     for delay in delays:
         await asyncio.sleep(delay)
 
@@ -15,6 +30,7 @@ async def _retry_in_background(refresh, delays):
             print(f"Knowledge base retry failed: {exc}")
         else:
             print("Knowledge base is ready after retry.")
+            await asyncio.to_thread(_run_on_ready, on_ready)
             return
 
     print(
@@ -23,12 +39,15 @@ async def _retry_in_background(refresh, delays):
     )
 
 
-async def warm_up(refresh, delays=None):
+async def warm_up(refresh, delays=None, on_ready=None):
     """Build the knowledge base at startup without ever stopping the server.
 
     If it fails (for example a rate limit), the server still starts and the
     work is retried in the background. Progress already saved is reused.
     Returns the background task, or None if nothing needs retrying.
+
+    on_ready (optional) runs only after a refresh SUCCEEDS, either now or
+    in a later retry. It never runs if the refresh failed.
     """
     if delays is None:
         delays = RETRY_DELAYS
@@ -40,8 +59,11 @@ async def warm_up(refresh, delays=None):
             f"Knowledge base could not be built at startup: {exc}\n"
             "The server will start anyway and retry in the background."
         )
-        return asyncio.create_task(_retry_in_background(refresh, delays))
+        return asyncio.create_task(
+            _retry_in_background(refresh, delays, on_ready)
+        )
 
+    _run_on_ready(on_ready)
     return None
 
 
