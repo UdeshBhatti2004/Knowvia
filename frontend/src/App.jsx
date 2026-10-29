@@ -35,7 +35,7 @@ function App() {
         return <KnowledgeSourcesPage onNavigate={handleNavigate} />
 
       case 'Uploaded Documents':
-        return <UploadedDocumentsPage />
+        return <UploadedDocumentsPage onNavigate={handleNavigate} />
 
       case 'Assistant Setup':
         return <AssistantSetupPage />
