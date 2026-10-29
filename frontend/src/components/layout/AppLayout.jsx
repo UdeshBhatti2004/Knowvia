@@ -8,7 +8,7 @@ function AppLayout({ children, activePage, onNavigate }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#0b0b0e] text-white">
+    <div className="flex h-dvh w-full overflow-hidden bg-[#0b0b0e] text-white">
       <Sidebar
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
