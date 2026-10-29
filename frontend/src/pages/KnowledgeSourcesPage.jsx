@@ -72,7 +72,14 @@ function KnowledgeSourcesPage() {
         throw new Error(message)
       }
 
-      setSuccess(`${data.filename || selectedFile.name} uploaded successfully.`)
+      // CHANGED: the server now replies as soon as the file is saved, and
+      // embeds it in the background. So we say "received", not "uploaded
+      // successfully", and point the user to the page that shows progress.
+      setSuccess(
+        `${data.filename || selectedFile.name} received. ` +
+          'It is being processed in the background. ' +
+          'Check the Uploaded Documents page to follow its progress.'
+      )
       setSelectedFile(null)
     } catch (err) {
       setError(
@@ -174,10 +181,10 @@ function KnowledgeSourcesPage() {
 
             <p className="mt-1 text-xs text-zinc-500">
               {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-              {' · '}
-              {isUploading
-                ? 'Processing, this can take a minute for large files'
-                : 'Ready to upload'}
+              {' \u00b7 '}
+              {/* CHANGED: the upload itself is quick now, so the old
+                  "this can take a minute" text no longer fits. */}
+              {isUploading ? 'Uploading...' : 'Ready to upload'}
             </p>
           </div>
 
@@ -246,7 +253,7 @@ function KnowledgeSourcesPage() {
             </button>
 
             <p className="mt-3 text-xs text-zinc-500">
-              PDF files only · Maximum 10 MB
+              PDF files only {'\u00b7'} Maximum 10 MB
             </p>
             <p className="mt-1 text-xs text-zinc-600">
               or drag and drop a file here

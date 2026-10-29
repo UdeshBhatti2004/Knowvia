@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile,BackgroundTasks
 from fastapi.testclient import TestClient
 
 from main import app
@@ -37,7 +37,11 @@ def test_upload_rolls_back_file_when_metadata_save_fails(tmp_path):
         ),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(source_service.upload_source(uploaded_file))
+            # upload_source now needs a BackgroundTasks object as its second argument.
+            # We create an empty one here, because this test only checks the rollback.
+            asyncio.run(
+                source_service.upload_source(uploaded_file, BackgroundTasks())
+            )
 
         assert exc_info.value.status_code == 500
         assert exc_info.value.detail == (
@@ -45,7 +49,10 @@ def test_upload_rolls_back_file_when_metadata_save_fails(tmp_path):
         )
 
         assert not (tmp_path / "rollback_test.pdf").exists()
-        assert mock_refresh.call_count == 2
+        # The embedding now happens in the background job, which is never
+        # scheduled when the metadata save fails. So nothing is embedded
+        # and nothing needs to be undone.
+        assert mock_refresh.call_count == 0
 
 
 def test_ask_returns_fallback_when_no_document_found():
