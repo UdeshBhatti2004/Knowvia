@@ -9,6 +9,7 @@ from app.api.routes.sources import router as sources_router
 from app.knowledge.retrieval import refresh_knowledge_base
 from app.knowledge.startup import stop_retrying, warm_up
 from app.services.source_service import recover_interrupted_uploads
+from app.api.routes.assistant import router as assistant_router
 
 
 @asynccontextmanager
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
 
     app.include_router(ask_router)
     app.include_router(sources_router)
+    app.include_router(assistant_router)   
 
     return app
 

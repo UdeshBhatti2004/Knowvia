@@ -26,6 +26,9 @@ DOCUMENTS_DIR = BACKEND_DIR / "documents"
 CACHE_FILE = BACKEND_DIR / "documents_embedding.pkl"
 SOURCES_METADATA_FILE = DOCUMENTS_DIR / "sources_metadata.json"
 
+
+ASSISTANT_SETTINGS_FILE = BACKEND_DIR / "assistant_settings.json"
+
 # Upload settings
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
