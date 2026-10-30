@@ -10,7 +10,10 @@
   X,
   FileText,
   Code,
+  LogOut,
 } from 'lucide-react'
+
+import { logout } from '../../services/api'
 
 const navigationItems = [
   { label: 'Overview', icon: LayoutDashboard },
@@ -182,6 +185,18 @@ function Sidebar({
               </p>
               <p className="text-[10px] text-zinc-500">Personal workspace</p>
             </div>
+
+            {!isCollapsed && (
+              <button
+                type="button"
+                onClick={logout}
+                aria-label="Log out"
+                title="Log out"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 outline-none transition hover:bg-white/[0.07] hover:text-white focus-visible:ring-2 focus-visible:ring-violet-500/60"
+              >
+                <LogOut size={17} />
+              </button>
+            )}
 
             {isCollapsed && (
               <button
