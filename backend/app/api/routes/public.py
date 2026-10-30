@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from app.api.client_ip import get_client_ip
 
 from app.api.routes.ask import ask_question
 from app.core.config import PUBLIC_RATE_LIMITS
@@ -17,8 +18,7 @@ def require_widget_key(x_widget_key: str | None = Header(default=None)) -> None:
 
 
 def enforce_rate_limit(request: Request) -> None:
-    # Behind a proxy this must read the forwarded IP. Revisit at deployment.
-    ip = request.client.host if request.client else "unknown"
+    ip = get_client_ip(request)
     wait = limiter.check(ip)
 
     if wait:

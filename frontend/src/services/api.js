@@ -37,6 +37,7 @@ export async function login(password) {
 
   if (response.status === 401) throw new Error('Wrong password.')
   if (response.status === 503) throw new Error('Login is not configured.')
+  if (response.status === 429) throw new Error('Too many attempts. Try again in a few minutes.')  
   if (!response.ok) throw new Error('Could not sign in. Try again.')
 
   const data = await response.json()

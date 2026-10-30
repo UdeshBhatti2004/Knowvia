@@ -2,7 +2,8 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
+from app.api.routes import auth as auth_route
+from app.services.rate_limiter import RateLimiter
 from app.core import config
 from app.main import app
 from app.services import auth_service
@@ -15,6 +16,7 @@ def configured():
     with (
         patch.object(config, "ADMIN_PASSWORD", "correct-horse"),
         patch.object(config, "AUTH_SECRET", "test-secret"),
+        patch.object(auth_route, "limiter", RateLimiter([(60, 1000)])),
     ):
         yield
 
@@ -84,3 +86,16 @@ def test_login_not_configured():
     with patch.object(config, "ADMIN_PASSWORD", None):
         response = client.post("/auth/login", json={"password": "x"})
     assert response.status_code == 503
+
+def test_login_rate_limited():
+    with patch.object(auth_route, "limiter", RateLimiter([(60, 3)])):
+        for _ in range(3):
+            assert (
+                client.post("/auth/login", json={"password": "nope"}).status_code
+                == 401
+            )
+
+        blocked = client.post("/auth/login", json={"password": "correct-horse"})
+
+    assert blocked.status_code == 429
+    assert int(blocked.headers["Retry-After"]) >= 1

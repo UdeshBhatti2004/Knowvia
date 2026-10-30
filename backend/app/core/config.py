@@ -43,3 +43,12 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 AUTH_SECRET = os.getenv("AUTH_SECRET")
 AUTH_TOKEN_TTL_SECONDS = 12 * 60 * 60
+
+# Login brute-force limits per IP: (window in seconds, max attempts).
+LOGIN_RATE_LIMITS = [(60, 5), (3600, 20)]
+
+# Number of reverse proxies in front of the app (0 = none, local dev).
+# Set TRUSTED_PROXY_HOPS=1 in production behind one proxy (Render, Railway, nginx).
+# Never set it above 0 if clients can reach the app directly, or the
+# X-Forwarded-For header can be spoofed.
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
