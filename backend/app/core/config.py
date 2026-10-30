@@ -32,3 +32,9 @@ ASSISTANT_SETTINGS_FILE = BACKEND_DIR / "assistant_settings.json"
 # Upload settings
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
+
+# Widget settings (publishable key)
+WIDGET_SETTINGS_FILE = BACKEND_DIR / "widget_settings.json"
+
+# Public widget limits: (window in seconds, max requests) per visitor IP.
+PUBLIC_RATE_LIMITS = [(60, 10), (86400, 100)]
