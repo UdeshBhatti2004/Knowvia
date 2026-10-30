@@ -48,7 +48,7 @@ function Sidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen shrink-0 flex-col border-r border-white/[0.08] bg-[#111114] text-white transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:z-20 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh shrink-0 flex-col border-r border-white/[0.08] bg-[#111114] text-white transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:z-20 ${
           isOpen
             ? 'translate-x-0'
             : '-translate-x-full invisible lg:translate-x-0 lg:visible'
