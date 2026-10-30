@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+﻿import { useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,7 +8,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 const uploadIdeas = [
   'Course details and fees',
@@ -66,7 +66,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const response = await fetch(`${API_URL}/sources/upload`, {
+      const response = await apiFetch(`${API_URL}/sources/upload`, {
         method: 'POST',
         body: formData,
       })

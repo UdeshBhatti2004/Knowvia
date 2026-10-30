@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import {
   Bot,
   Check,
@@ -7,7 +7,7 @@ import {
   RotateCcw,
   User,
 } from 'lucide-react'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 // Placeholders and preview fallbacks only. The real values come from the backend.
 const DEFAULTS = {
@@ -93,7 +93,7 @@ function AssistantSetupPage() {
       setLoadError('')
 
       try {
-        const response = await fetch(`${API_URL}/assistant`)
+        const response = await apiFetch(`${API_URL}/assistant`)
         if (!response.ok) {
           throw new Error(
             await readError(response, 'Could not load assistant settings.'),
@@ -148,7 +148,7 @@ function AssistantSetupPage() {
     setSaveError('')
 
     try {
-      const response = await fetch(`${API_URL}/assistant`, {
+      const response = await apiFetch(`${API_URL}/assistant`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(toApi(values)),

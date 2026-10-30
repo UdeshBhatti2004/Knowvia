@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+﻿import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -10,7 +10,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 // How often (in milliseconds) to re-check the list while a file is processing.
 const POLL_INTERVAL_MS = 3000
@@ -101,7 +101,7 @@ function UploadedDocumentsPage({ onNavigate }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/sources`)
+      const response = await apiFetch(`${API_URL}/sources`)
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
@@ -152,7 +152,7 @@ function UploadedDocumentsPage({ onNavigate }) {
     setActionError('')
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/sources/${encodeURIComponent(filename)}`,
         { method: 'DELETE' }
       )

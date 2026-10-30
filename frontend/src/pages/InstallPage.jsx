@@ -8,7 +8,7 @@ import {
   Globe,
   Save,
 } from 'lucide-react'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 function InstallPage() {
   const [publicKey, setPublicKey] = useState('')
@@ -26,7 +26,7 @@ function InstallPage() {
   useEffect(() => {
     async function load() {
       try {
-        const response = await fetch(`${API_URL}/widget`)
+        const response = await apiFetch(`${API_URL}/widget`)
         if (!response.ok) throw new Error()
         const data = await response.json()
         setPublicKey(data.public_key)
@@ -42,7 +42,7 @@ function InstallPage() {
   useEffect(() => {
     async function loadDomains() {
       try {
-        const response = await fetch(`${API_URL}/widget/domains`)
+        const response = await apiFetch(`${API_URL}/widget/domains`)
         if (!response.ok) throw new Error()
         const data = await response.json()
         const text = data.domains.join('\n')
@@ -80,7 +80,7 @@ function InstallPage() {
       .filter(Boolean)
 
     try {
-      const response = await fetch(`${API_URL}/widget/domains`, {
+      const response = await apiFetch(`${API_URL}/widget/domains`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domains }),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+﻿import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowRight,
@@ -11,7 +11,7 @@ import {
   MessageSquare,
   Sparkles,
 } from 'lucide-react'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 // How often (in milliseconds) to re-check while a file is processing.
 const POLL_INTERVAL_MS = 3000
@@ -109,7 +109,7 @@ function OverviewPage({ onNavigate, onAskSample }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/sources`)
+      const response = await apiFetch(`${API_URL}/sources`)
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
@@ -138,7 +138,7 @@ function OverviewPage({ onNavigate, onAskSample }) {
 
     async function checkAssistant() {
       try {
-        const response = await fetch(`${API_URL}/assistant`)
+        const response = await apiFetch(`${API_URL}/assistant`)
         if (!response.ok) return
         const data = await response.json()
         if (cancelled) return

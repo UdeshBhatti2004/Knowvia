@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { Bot, RotateCcw, User } from 'lucide-react'
 import QuestionInput from '../components/chat/QuestionInput'
 import AnswerCard from '../components/answers/AnswerCard'
-import { API_URL } from '../services/api'
+import { API_URL, apiFetch } from '../services/api'
 
 // Used until the saved settings load, and if loading them fails.
 const DEFAULT_NAME = 'Knowvia Assistant'
@@ -40,7 +40,7 @@ function AskPage({ initialQuestion = '', onInitialQuestionUsed }) {
 
     async function loadAssistant() {
       try {
-        const response = await fetch(`${API_URL}/assistant`)
+        const response = await apiFetch(`${API_URL}/assistant`)
         if (!response.ok) return
         const data = await response.json()
         if (cancelled) return
@@ -83,7 +83,7 @@ function AskPage({ initialQuestion = '', onInitialQuestionUsed }) {
     ])
 
     try {
-      const response = await fetch(`${API_URL}/ask`, {
+      const response = await apiFetch(`${API_URL}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
