@@ -26,6 +26,11 @@ DOCUMENTS_DIR = BACKEND_DIR / "documents"
 CACHE_FILE = BACKEND_DIR / "documents_embedding.pkl"
 SOURCES_METADATA_FILE = DOCUMENTS_DIR / "sources_metadata.json"
 
+WIDGET_SETTINGS_FILE = BACKEND_DIR / "widget_settings.json"
+
+# Public widget limits: (window in seconds, max requests) per visitor IP.
+PUBLIC_RATE_LIMITS = [(60, 10), (86400, 100)]
+
 
 ASSISTANT_SETTINGS_FILE = BACKEND_DIR / "assistant_settings.json"
 
@@ -33,8 +38,8 @@ ASSISTANT_SETTINGS_FILE = BACKEND_DIR / "assistant_settings.json"
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
 
-# Widget settings (publishable key)
-WIDGET_SETTINGS_FILE = BACKEND_DIR / "widget_settings.json"
 
-# Public widget limits: (window in seconds, max requests) per visitor IP.
-PUBLIC_RATE_LIMITS = [(60, 10), (86400, 100)]
+# Admin auth (single admin for now). Both must be set in .env to enable login.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+AUTH_SECRET = os.getenv("AUTH_SECRET")
+AUTH_TOKEN_TTL_SECONDS = 12 * 60 * 60

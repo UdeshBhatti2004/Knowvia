@@ -1,17 +1,19 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import require_admin
 from app.api.routes.ask import router as ask_router
+from app.api.routes.assistant import router as assistant_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.public import router as public_router
 from app.api.routes.sources import router as sources_router
+from app.api.routes.widget import router as widget_router
 from app.knowledge.retrieval import refresh_knowledge_base
 from app.knowledge.startup import stop_retrying, warm_up
 from app.services.source_service import recover_interrupted_uploads
-from app.api.routes.assistant import router as assistant_router
-from app.api.routes.public import router as public_router
-from app.api.routes.widget import router as widget_router
 
 
 @asynccontextmanager
@@ -51,14 +53,20 @@ def create_app() -> FastAPI:
     def home():
         return {"message": "Knowvia API is running"}
 
-    app.include_router(ask_router)
-    app.include_router(sources_router)
-    app.include_router(assistant_router)
-    app.include_router(assistant_router)
+    admin = [Depends(require_admin)]
+
+    # Dashboard API: admin token required.
+    app.include_router(ask_router, dependencies=admin)
+    app.include_router(sources_router, dependencies=admin)
+    app.include_router(assistant_router, dependencies=admin)
+
+    # Open or self-protected: login, public widget (widget key), widget routes
+    # (per-route protection inside widget.py).
+    app.include_router(auth_router)
     app.include_router(public_router)
     app.include_router(widget_router)
-    
 
     return app
+
 
 app = create_app()

@@ -1,6 +1,7 @@
-﻿from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.auth import require_admin
 from app.services.domain_service import (
     MAX_DOMAINS,
     get_allowed_domains,
@@ -15,7 +16,7 @@ class DomainsUpdate(BaseModel):
     domains: list[str] = Field(max_length=MAX_DOMAINS)
 
 
-@router.get("/widget")
+@router.get("/widget", dependencies=[Depends(require_admin)])
 def get_widget_route():
     return {"public_key": get_public_key()}
 
@@ -25,7 +26,7 @@ def get_domains_route():
     return {"domains": get_allowed_domains()}
 
 
-@router.put("/widget/domains")
+@router.put("/widget/domains", dependencies=[Depends(require_admin)])
 def put_domains_route(payload: DomainsUpdate):
     try:
         return {"domains": set_allowed_domains(payload.domains)}
