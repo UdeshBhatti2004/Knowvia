@@ -3,9 +3,20 @@ import time
 from app.schemas.question import QuestionRequest
 from app.services.answer_service import AnswerQuotaExceeded, generate_answer
 from app.services.knowledge_service import retrieve_knowledge
+from app.schemas.assistant import DEFAULT_FALLBACK_MESSAGE
+from app.services.assistant_service import get_assistant_settings
 
 
 router = APIRouter()
+
+
+def _fallback_message() -> str:
+    # A broken settings file must never break /ask, so fall back to the default.
+    try:
+        return get_assistant_settings().fallback_message
+    except Exception as exc:
+        print(f"Could not load assistant settings: {exc}")
+        return DEFAULT_FALLBACK_MESSAGE
 
 
 @router.post("/ask")
@@ -24,10 +35,7 @@ def ask_question(request: QuestionRequest):
     if not documents:
         return {
             "question": request.question,
-            "answer": (
-                "Sorry, I couldn't find relevant information "
-                "in the available documents."
-            ),
+            "answer": _fallback_message(),
             "source": None,
             "page": None,
             "similarity": None,
@@ -73,6 +81,11 @@ def ask_question(request: QuestionRequest):
             status_code=502,
             detail="Answer generation failed. Please try again later.",
         ) from exc
+
+    # The model is told to use this exact sentence when the context has no
+    # answer. Swap it for the saved fallback.
+    if answer.strip() == DEFAULT_FALLBACK_MESSAGE:
+        answer = _fallback_message()
 
     return {
         "question": request.question,
