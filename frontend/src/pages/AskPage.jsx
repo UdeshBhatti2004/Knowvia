@@ -4,10 +4,9 @@ import QuestionInput from '../components/chat/QuestionInput'
 import AnswerCard from '../components/answers/AnswerCard'
 import { API_URL } from '../services/api'
 
-// UI only: these match the defaults on the Assistant Setup page. They will
-// come from the saved assistant settings once those exist.
-const ASSISTANT_NAME = 'Knowvia Assistant'
-const WELCOME_MESSAGE = 'How can I help you today?'
+// Used until the saved settings load, and if loading them fails.
+const DEFAULT_NAME = 'Knowvia Assistant'
+const DEFAULT_WELCOME = 'How can I help you today?'
 
 const suggestions = [
   'What courses do we offer?',
@@ -29,7 +28,36 @@ function AskPage() {
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [assistant, setAssistant] = useState({
+    name: DEFAULT_NAME,
+    welcome: DEFAULT_WELCOME,
+  })
   const bottomRef = useRef(null)
+
+  // Load the saved assistant name and welcome message once.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAssistant() {
+      try {
+        const response = await fetch(`${API_URL}/assistant`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (cancelled) return
+        setAssistant({
+          name: data.name || DEFAULT_NAME,
+          welcome: data.welcome_message || DEFAULT_WELCOME,
+        })
+      } catch {
+        // Keep the defaults. The chat must work even if settings fail.
+      }
+    }
+
+    loadAssistant()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -127,9 +155,9 @@ function AskPage() {
         <div className="flex items-start gap-2.5">
           <AssistantAvatar />
           <div className="w-11/12 min-w-0 sm:w-4/5">
-            <p className="mb-1 text-[11px] text-zinc-500">{ASSISTANT_NAME}</p>
+            <p className="mb-1 text-[11px] text-zinc-500">{assistant.name}</p>
             <p className="inline-block break-words rounded-2xl rounded-tl-sm bg-white/[0.05] px-4 py-2.5 text-sm leading-6 text-zinc-200">
-              {WELCOME_MESSAGE}
+              {assistant.welcome}
             </p>
           </div>
         </div>
@@ -173,7 +201,7 @@ function AskPage() {
               <AssistantAvatar />
               <div className="w-11/12 min-w-0 sm:w-4/5">
                 <p className="mb-1 text-[11px] text-zinc-500">
-                  {ASSISTANT_NAME}
+                  {assistant.name}
                 </p>
 
                 {message.error ? (
@@ -203,7 +231,7 @@ function AskPage() {
           <div className="flex items-start gap-2.5" role="status">
             <AssistantAvatar />
             <div className="min-w-0">
-              <p className="mb-1 text-[11px] text-zinc-500">{ASSISTANT_NAME}</p>
+              <p className="mb-1 text-[11px] text-zinc-500">{assistant.name}</p>
               <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-white/[0.05] px-4 py-3">
                 <span className="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
