@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrainCircuit,
   LayoutDashboard,
   Files,
@@ -9,6 +9,7 @@ import {
   PanelLeftOpen,
   X,
   FileText,
+  Code,
 } from 'lucide-react'
 
 const navigationItems = [
@@ -17,6 +18,7 @@ const navigationItems = [
   { label: 'Uploaded Documents', icon: FileText },
   { label: 'Test Assistant', icon: MessageSquare },
   { label: 'Assistant Setup', icon: SlidersHorizontal },
+  { label: 'Install', icon: Code },
 ]
 
 function Sidebar({

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
 import AskPage from './pages/AskPage'
 import KnowledgeSourcesPage from './pages/KnowledgeSourcesPage'
 import UploadedDocumentsPage from './pages/UploadedDocumentsPage'
 import AssistantSetupPage from './pages/AssistantSetupPage'
+import InstallPage from './pages/InstallPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -19,6 +20,7 @@ function App() {
       'Uploaded Documents',
       'Test Assistant',
       'Assistant Setup',
+      'Install',
       'Settings',
     ]
 
@@ -50,6 +52,9 @@ function App() {
 
       case 'Assistant Setup':
         return <AssistantSetupPage />
+
+      case 'Install':
+        return <InstallPage />
 
       case 'Settings':
         return <SettingsPage />
