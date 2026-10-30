@@ -1,4 +1,3 @@
-
 import { useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
 import AskPage from './pages/AskPage'
@@ -10,6 +9,8 @@ import SettingsPage from './pages/SettingsPage'
 
 function App() {
   const [activePage, setActivePage] = useState('Overview')
+  // A sample question picked on Overview, waiting for Test Assistant to use it.
+  const [pendingQuestion, setPendingQuestion] = useState('')
 
   function handleNavigate(page) {
     const availablePages = [
@@ -26,10 +27,20 @@ function App() {
     }
   }
 
+  function handleAskSample(question) {
+    setPendingQuestion(question)
+    setActivePage('Test Assistant')
+  }
+
   function renderPage() {
     switch (activePage) {
       case 'Overview':
-        return <OverviewPage onNavigate={handleNavigate} />
+        return (
+          <OverviewPage
+            onNavigate={handleNavigate}
+            onAskSample={handleAskSample}
+          />
+        )
 
       case 'Knowledge Sources':
         return <KnowledgeSourcesPage onNavigate={handleNavigate} />
@@ -45,7 +56,12 @@ function App() {
 
       case 'Test Assistant':
       default:
-        return <AskPage />
+        return (
+          <AskPage
+            initialQuestion={pendingQuestion}
+            onInitialQuestionUsed={() => setPendingQuestion('')}
+          />
+        )
     }
   }
 

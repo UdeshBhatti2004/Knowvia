@@ -23,9 +23,9 @@ function AssistantAvatar() {
     </div>
   )
 }
+function AskPage({ initialQuestion = '', onInitialQuestionUsed }) {
 
-function AskPage() {
-  const [question, setQuestion] = useState('')
+  const [question, setQuestion] = useState(initialQuestion)
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [assistant, setAssistant] = useState({
@@ -63,6 +63,12 @@ function AskPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, isLoading])
+
+    // A sample question from Overview pre-fills the input once, then is cleared
+  // so it does not come back on the next visit.
+  useEffect(() => {
+    if (initialQuestion) onInitialQuestionUsed?.()
+  }, [initialQuestion, onInitialQuestionUsed])
 
   async function handleSubmit(value = question) {
     const submittedQuestion = value.trim()

@@ -16,12 +16,19 @@ import { API_URL } from '../services/api'
 // How often (in milliseconds) to re-check while a file is processing.
 const POLL_INTERVAL_MS = 3000
 
-// Still static: nothing stores these yet (Assistant Setup is read-only and
-// there is no test history). Replace when those features get a backend.
+// Still static: there is no test history yet. Replace when it gets a backend.
 const setup = {
-  assistantConfigured: false,
   tested: false,
   lastTest: null,
+}
+
+// Must match the defaults in backend/app/schemas/assistant.py.
+// Anything different from these counts as "configured".
+const BACKEND_DEFAULTS = {
+  name: 'Business Assistant',
+  welcome_message: 'Hi! Ask me anything about our business.',
+  fallback_message:
+    "Sorry, I couldn't find relevant information in the available documents.",
 }
 
 const sampleQuestions = [
@@ -85,10 +92,12 @@ function StatusBadge({ status }) {
   )
 }
 
-function OverviewPage({ onNavigate }) {
+function OverviewPage({ onNavigate, onAskSample }) {
   const [sources, setSources] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [assistantConfigured, setAssistantConfigured] = useState(false)
+  const [assistantChecked, setAssistantChecked] = useState(false)
 
   // showSpinner = true: first load or Retry (shows loading and errors).
   // showSpinner = false: the automatic check while a file is processing.
@@ -123,6 +132,34 @@ function OverviewPage({ onNavigate }) {
     fetchSources()
   }, [fetchSources])
 
+  // Configured = the saved settings differ from the backend defaults.
+  useEffect(() => {
+    let cancelled = false
+
+    async function checkAssistant() {
+      try {
+        const response = await fetch(`${API_URL}/assistant`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (cancelled) return
+        setAssistantConfigured(
+          data.name !== BACKEND_DEFAULTS.name ||
+            data.welcome_message !== BACKEND_DEFAULTS.welcome_message ||
+            data.fallback_message !== BACKEND_DEFAULTS.fallback_message,
+        )
+      } catch {
+        // Leave it as "not configured". Overview still works.
+      } finally {
+        if (!cancelled) setAssistantChecked(true)
+      }
+    }
+
+    checkAssistant()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const processingCount = sources.filter((s) => s.status === 'Processing').length
   const failedCount = sources.filter((s) => s.status === 'Failed').length
   const processedCount = sources.length - processingCount - failedCount
@@ -140,7 +177,7 @@ function OverviewPage({ onNavigate }) {
     return () => clearInterval(timer)
   }, [hasProcessing, fetchSources])
 
-  const { assistantConfigured, tested, lastTest } = setup
+  const { tested, lastTest } = setup
 
   const hasDocuments = sources.length > 0
   // Failed uploads do not count as "documents added".
@@ -148,7 +185,8 @@ function OverviewPage({ onNavigate }) {
 
   // Do not show setup or empty-state content until the first load finishes,
   // or after a failed first load (it would be misleading).
-  const isInitialLoading = loading && sources.length === 0
+  const isInitialLoading =
+    (loading && sources.length === 0) || !assistantChecked
   const loadFailed = Boolean(error) && sources.length === 0
   const showContent = !isInitialLoading && !loadFailed
 
@@ -432,7 +470,7 @@ function OverviewPage({ onNavigate }) {
                 <button
                   key={question}
                   type="button"
-                  onClick={() => onNavigate('Test Assistant')}
+                  onClick={() => onAskSample(question)}
                   className="group flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.08] px-4 py-3 text-left text-sm text-zinc-300 transition hover:border-violet-400/30 hover:bg-violet-500/[0.05] hover:text-white"
                 >
                   <span className="min-w-0">{question}</span>
