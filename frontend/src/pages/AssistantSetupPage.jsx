@@ -1,11 +1,22 @@
-import { useState } from 'react'
-import { Bot, Check, MessageSquare, RotateCcw, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  Bot,
+  Check,
+  Loader2,
+  MessageSquare,
+  RotateCcw,
+  User,
+} from 'lucide-react'
+import { API_URL } from '../services/api'
 
+// Placeholders and preview fallbacks only. The real values come from the backend.
 const DEFAULTS = {
   name: 'Knowvia Assistant',
   welcome: 'How can I help you today?',
   fallback: "I couldn't find that information in our business documents.",
 }
+
+const EMPTY = { name: '', welcome: '', fallback: '' }
 
 const LIMITS = {
   name: 40,
@@ -14,7 +25,34 @@ const LIMITS = {
 }
 
 const inputClass =
-  'w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-400/50'
+  'w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-400/50 disabled:opacity-50'
+
+// Backend field names differ from the form's, so map in both directions.
+function fromApi(data) {
+  return {
+    name: data.name,
+    welcome: data.welcome_message,
+    fallback: data.fallback_message,
+  }
+}
+
+function toApi(values) {
+  return {
+    name: values.name.trim(),
+    welcome_message: values.welcome.trim(),
+    fallback_message: values.fallback.trim(),
+  }
+}
+
+async function readError(response, fallbackText) {
+  try {
+    const body = await response.json()
+    if (typeof body.detail === 'string') return body.detail
+  } catch {
+    // not JSON, use the fallback text
+  }
+  return fallbackText
+}
 
 function Field({ id, label, hint, count, limit, children }) {
   return (
@@ -38,11 +76,51 @@ function Field({ id, label, hint, count, limit, children }) {
 }
 
 function AssistantSetupPage() {
-  // UI only for now: values live in this page's state and are not saved
-  // anywhere yet. Saving to the backend comes in a later step.
-  const [values, setValues] = useState(DEFAULTS)
-  const [saved, setSaved] = useState(DEFAULTS)
+  const [values, setValues] = useState(EMPTY)
+  const [saved, setSaved] = useState(EMPTY)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [justSaved, setJustSaved] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setLoadError('')
+
+      try {
+        const response = await fetch(`${API_URL}/assistant`)
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, 'Could not load assistant settings.'),
+          )
+        }
+        const loaded = fromApi(await response.json())
+        if (cancelled) return
+        setValues(loaded)
+        setSaved(loaded)
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof TypeError
+              ? 'Could not reach the server.'
+              : error.message,
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [reloadKey])
 
   const isDirty =
     values.name !== saved.name ||
@@ -50,22 +128,57 @@ function AssistantSetupPage() {
     values.fallback !== saved.fallback
 
   const nameMissing = values.name.trim() === ''
-  const canSave = isDirty && !nameMissing
+  const welcomeMissing = values.welcome.trim() === ''
+  const fallbackMissing = values.fallback.trim() === ''
+  const hasMissing = nameMissing || welcomeMissing || fallbackMissing
+
+  const locked = loading || saving || Boolean(loadError)
+  const canSave = isDirty && !hasMissing && !locked
 
   function update(field, value) {
     setValues((current) => ({ ...current, [field]: value }))
     setJustSaved(false)
+    setSaveError('')
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return
-    setSaved(values)
-    setJustSaved(true)
+
+    setSaving(true)
+    setSaveError('')
+
+    try {
+      const response = await fetch(`${API_URL}/assistant`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(toApi(values)),
+      })
+      if (!response.ok) {
+        throw new Error(
+          await readError(response, 'Could not save. Please try again.'),
+        )
+      }
+      // Use the server's copy (it trims whitespace).
+      const next = fromApi(await response.json())
+      setValues(next)
+      setSaved(next)
+      setJustSaved(true)
+    } catch (error) {
+      setSaveError(
+        error instanceof TypeError
+          ? 'Could not reach the server.'
+          : error.message,
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
+  // Reset goes back to the last saved values.
   function handleReset() {
-    setValues(DEFAULTS)
+    setValues(saved)
     setJustSaved(false)
+    setSaveError('')
   }
 
   const previewName = values.name.trim() || 'Your assistant'
@@ -81,7 +194,7 @@ function AssistantSetupPage() {
             <h1 className="text-lg font-medium tracking-tight text-zinc-100">
               Assistant Setup
             </h1>
-            {isDirty && (
+            {isDirty && !loading && (
               <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">
                 Unsaved changes
               </span>
@@ -102,7 +215,8 @@ function AssistantSetupPage() {
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"
+            disabled={!isDirty || locked}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
           >
             <RotateCcw size={13} />
             Reset
@@ -113,10 +227,36 @@ function AssistantSetupPage() {
             disabled={!canSave}
             className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-violet-600"
           >
-            Save changes
+            {saving && <Loader2 size={13} className="animate-spin" />}
+            {saving ? 'Saving...' : 'Save changes'}
           </button>
         </div>
       </header>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300"
+        >
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((key) => key + 1)}
+            className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-400/10"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {saveError && (
+        <p
+          role="alert"
+          className="mt-5 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300"
+        >
+          {saveError}
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Form */}
@@ -139,13 +279,14 @@ function AssistantSetupPage() {
                   type="text"
                   value={values.name}
                   maxLength={LIMITS.name}
+                  disabled={locked}
                   onChange={(event) => update('name', event.target.value)}
                   placeholder={DEFAULTS.name}
-                  aria-invalid={nameMissing}
+                  aria-invalid={!loading && nameMissing}
                   className={inputClass}
                 />
               </Field>
-              {nameMissing && (
+              {!loading && !loadError && nameMissing && (
                 <p role="alert" className="mt-1.5 text-xs text-red-400">
                   Give your assistant a name.
                 </p>
@@ -160,41 +301,57 @@ function AssistantSetupPage() {
             </p>
 
             <div className="mt-4 space-y-5">
-              <Field
-                id="welcome-message"
-                label="Welcome message"
-                hint="Shown when a customer opens the chat."
-                count={values.welcome.length}
-                limit={LIMITS.welcome}
-              >
-                <textarea
+              <div>
+                <Field
                   id="welcome-message"
-                  rows={3}
-                  value={values.welcome}
-                  maxLength={LIMITS.welcome}
-                  onChange={(event) => update('welcome', event.target.value)}
-                  placeholder={DEFAULTS.welcome}
-                  className={`${inputClass} resize-y leading-6`}
-                />
-              </Field>
+                  label="Welcome message"
+                  hint="Shown when a customer opens the chat."
+                  count={values.welcome.length}
+                  limit={LIMITS.welcome}
+                >
+                  <textarea
+                    id="welcome-message"
+                    rows={3}
+                    value={values.welcome}
+                    maxLength={LIMITS.welcome}
+                    disabled={locked}
+                    onChange={(event) => update('welcome', event.target.value)}
+                    placeholder={DEFAULTS.welcome}
+                    className={`${inputClass} resize-y leading-6`}
+                  />
+                </Field>
+                {!loading && !loadError && welcomeMissing && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">
+                    Add a welcome message.
+                  </p>
+                )}
+              </div>
 
-              <Field
-                id="fallback-message"
-                label="When an answer isn't found"
-                hint="Sent when the documents do not contain the answer."
-                count={values.fallback.length}
-                limit={LIMITS.fallback}
-              >
-                <textarea
+              <div>
+                <Field
                   id="fallback-message"
-                  rows={3}
-                  value={values.fallback}
-                  maxLength={LIMITS.fallback}
-                  onChange={(event) => update('fallback', event.target.value)}
-                  placeholder={DEFAULTS.fallback}
-                  className={`${inputClass} resize-y leading-6`}
-                />
-              </Field>
+                  label="When an answer isn't found"
+                  hint="Sent when the documents do not contain the answer."
+                  count={values.fallback.length}
+                  limit={LIMITS.fallback}
+                >
+                  <textarea
+                    id="fallback-message"
+                    rows={3}
+                    value={values.fallback}
+                    maxLength={LIMITS.fallback}
+                    disabled={locked}
+                    onChange={(event) => update('fallback', event.target.value)}
+                    placeholder={DEFAULTS.fallback}
+                    className={`${inputClass} resize-y leading-6`}
+                  />
+                </Field>
+                {!loading && !loadError && fallbackMissing && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">
+                    Add a message for when no answer is found.
+                  </p>
+                )}
+              </div>
             </div>
           </section>
         </div>
@@ -208,7 +365,7 @@ function AssistantSetupPage() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-zinc-100">
-                  {previewName}
+                  {loading ? 'Loading...' : previewName}
                 </p>
                 <p className="text-[11px] text-zinc-500">Live preview</p>
               </div>
