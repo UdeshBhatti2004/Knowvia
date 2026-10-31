@@ -11,7 +11,7 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-// fetch wrapper for the dashboard API. Adds the admin token, and on a 401
+// fetch wrapper for the dashboard API. Adds the token, and on a 401
 // clears it and tells the app to show the login screen.
 export async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {})
@@ -28,20 +28,43 @@ export async function apiFetch(url, options = {}) {
   return response
 }
 
-export async function login(password) {
-  const response = await fetch(`${API_URL}/auth/login`, {
+async function authRequest(path, body, errors) {
+  const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(body),
   })
 
-  if (response.status === 401) throw new Error('Wrong password.')
+  if (response.status === 429) {
+    throw new Error('Too many attempts. Try again in a few minutes.')
+  }
   if (response.status === 503) throw new Error('Login is not configured.')
-  if (response.status === 429) throw new Error('Too many attempts. Try again in a few minutes.')  
-  if (!response.ok) throw new Error('Could not sign in. Try again.')
+  if (errors[response.status]) throw new Error(errors[response.status])
+  if (!response.ok) throw new Error('Something went wrong. Try again.')
 
   const data = await response.json()
   localStorage.setItem(TOKEN_KEY, data.token)
+  return data
+}
+
+// With an email: account login. Without: legacy admin-password login.
+export function login(password, email) {
+  const body = email ? { email, password } : { password }
+  return authRequest('/auth/login', body, {
+    401: email ? 'Wrong email or password.' : 'Wrong password.',
+    422: 'Enter a valid email and password.',
+  })
+}
+
+export function signup(email, password, workspaceName) {
+  return authRequest(
+    '/auth/signup',
+    { email, password, workspace_name: workspaceName },
+    {
+      409: 'That email is already registered.',
+      422: 'Check your email, and use a password of at least 8 characters.',
+    },
+  )
 }
 
 export function logout() {
