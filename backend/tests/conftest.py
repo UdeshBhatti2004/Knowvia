@@ -8,6 +8,7 @@ REAL_AUTH_MODULES = (
     "test_auth",
     "test_auth_accounts",
     "test_sources_workspaces",
+    "test_workspace_settings",
 )
 
 

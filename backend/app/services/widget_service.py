@@ -1,6 +1,8 @@
 import secrets
 import threading
 
+from app.repositories import workspace_repository
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.repositories.widget_repository import (
     load_widget_settings,
     save_widget_settings,
@@ -9,8 +11,18 @@ from app.repositories.widget_repository import (
 _lock = threading.Lock()
 
 
-def get_public_key() -> str:
-    """The widget's publishable key. Created on first use, then stable."""
+def get_public_key(workspace_id: str = DEFAULT_WORKSPACE_ID) -> str:
+    """The workspace's publishable key.
+
+    Real workspaces get theirs at signup. "default" (the admin workspace)
+    creates one on first use, then it stays stable.
+    """
+    if workspace_id != DEFAULT_WORKSPACE_ID:
+        workspace = workspace_repository.get_by_id(workspace_id)
+        if not workspace:
+            raise LookupError("Workspace not found.")
+        return workspace["widget_key"]
+
     with _lock:
         settings = load_widget_settings()
         key = settings.get("public_key")

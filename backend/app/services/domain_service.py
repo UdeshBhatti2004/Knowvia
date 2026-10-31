@@ -1,6 +1,7 @@
 ﻿import re
 import threading
 
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.repositories.widget_repository import (
     load_widget_settings,
     save_widget_settings,
@@ -39,16 +40,18 @@ def normalize_domains(raw_domains: list[str]) -> list[str]:
     return result
 
 
-def get_allowed_domains() -> list[str]:
-    domains = load_widget_settings().get("allowed_domains", [])
+def get_allowed_domains(workspace_id: str = DEFAULT_WORKSPACE_ID) -> list[str]:
+    domains = load_widget_settings(workspace_id).get("allowed_domains", [])
     return domains if isinstance(domains, list) else []
 
 
-def set_allowed_domains(raw_domains: list[str]) -> list[str]:
+def set_allowed_domains(
+    raw_domains: list[str], workspace_id: str = DEFAULT_WORKSPACE_ID
+) -> list[str]:
     domains = normalize_domains(raw_domains)
 
     with _key_lock:
-        settings = load_widget_settings()
-        save_widget_settings({**settings, "allowed_domains": domains})
+        settings = load_widget_settings(workspace_id)
+        save_widget_settings({**settings, "allowed_domains": domains}, workspace_id)
 
     return domains

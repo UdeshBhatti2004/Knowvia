@@ -1,5 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 import time
+
+from app.api.auth import require_user
+from app.knowledge.workspace_loader import ensure_loaded
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.schemas.question import QuestionRequest
 from app.services.answer_service import AnswerQuotaExceeded, generate_answer
 from app.services.knowledge_service import retrieve_knowledge
@@ -10,20 +14,32 @@ from app.services.assistant_service import get_assistant_settings
 router = APIRouter()
 
 
-def _fallback_message() -> str:
-    # A broken settings file must never break /ask, so fall back to the default.
+def _fallback_message(workspace_id: str = DEFAULT_WORKSPACE_ID) -> str:
+    # Broken settings must never break /ask, so fall back to the default.
     try:
-        return get_assistant_settings().fallback_message
+        return get_assistant_settings(workspace_id).fallback_message
     except Exception as exc:
         print(f"Could not load assistant settings: {exc}")
         return DEFAULT_FALLBACK_MESSAGE
 
 
 @router.post("/ask")
-def ask_question(request: QuestionRequest):
+def ask_endpoint(
+    request: QuestionRequest, workspace_id: str = Depends(require_user)
+):
+    ensure_loaded(workspace_id)
+    return ask_question(request, workspace_id)
+
+
+def ask_question(request: QuestionRequest, workspace_id: str = DEFAULT_WORKSPACE_ID):
     try:
         started = time.perf_counter()
-        documents, _ = retrieve_knowledge(request.question)
+        if workspace_id == DEFAULT_WORKSPACE_ID:
+            documents, _ = retrieve_knowledge(request.question)
+        else:
+            documents, _ = retrieve_knowledge(
+                request.question, workspace_id=workspace_id
+            )
         print(f"[timing] retrieval: {time.perf_counter() - started:.2f}s")
     except Exception as exc:
         print(f"Document retrieval failed: {exc}")
@@ -35,7 +51,7 @@ def ask_question(request: QuestionRequest):
     if not documents:
         return {
             "question": request.question,
-            "answer": _fallback_message(),
+            "answer": _fallback_message(workspace_id),
             "source": None,
             "page": None,
             "similarity": None,
@@ -85,7 +101,7 @@ def ask_question(request: QuestionRequest):
     # The model is told to use this exact sentence when the context has no
     # answer. Swap it for the saved fallback.
     if answer.strip() == DEFAULT_FALLBACK_MESSAGE:
-        answer = _fallback_message()
+        answer = _fallback_message(workspace_id)
 
     return {
         "question": request.question,
