@@ -13,6 +13,7 @@ import numpy as np
 from google.genai import errors
 
 from app.core.ai_client import client
+from app.core.ai_client import client
 from app.core.config import (
     CACHE_FILE,
     DOCUMENTS_DIR,
@@ -21,6 +22,8 @@ from app.knowledge.pdf_reader import extract_text_from_pdf
 from app.knowledge.chunking import chunk_pages
 from app.knowledge.cache_manager import get_or_create_embeddings
 from app.knowledge.storage_sync import push_cache
+from app.knowledge.workspace_paths import workspace_paths
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 
 
 embedding_model = "gemini-embedding-2"
@@ -42,8 +45,31 @@ knowledge_base_state = KnowledgeBaseState(
     pdf_hashes=MappingProxyType({}),
     pdf_modified_time=MappingProxyType({}),
 )
+
 refresh_lock = threading.Lock()
 
+# Other workspaces: id -> state and id -> lock. "default" keeps using the
+# module-level knowledge_base_state and refresh_lock above.
+_states: dict[str, KnowledgeBaseState] = {}
+_locks: dict[str, threading.Lock] = {}
+_registry_lock = threading.Lock()
+
+
+def _lock_for(workspace_id):
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return refresh_lock
+    with _registry_lock:
+        return _locks.setdefault(workspace_id, threading.Lock())
+
+
+def get_state(workspace_id=DEFAULT_WORKSPACE_ID):
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return knowledge_base_state
+    return _states.get(workspace_id)
+
+
+def is_loaded(workspace_id=DEFAULT_WORKSPACE_ID):
+    return get_state(workspace_id) is not None
 
 def get_embedding(text):
     max_attempts = 3
@@ -71,14 +97,19 @@ def get_embedding(text):
             time.sleep(2 ** attempt)
 
 
-def refresh_knowledge_base():
+def refresh_knowledge_base(workspace_id=DEFAULT_WORKSPACE_ID):
     global knowledge_base_state
 
-    with refresh_lock:
-        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    docs_dir, cache_file = workspace_paths(
+        workspace_id, DOCUMENTS_DIR, CACHE_FILE
+    )
+
+    with _lock_for(workspace_id):
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
 
         pdf_paths = sorted(
-            glob.glob(str(DOCUMENTS_DIR / "*.pdf"))
+            glob.glob(str(docs_dir / "*.pdf"))
         )
 
         current_hashes = {}
@@ -106,7 +137,7 @@ def refresh_knowledge_base():
         started = time.perf_counter()
         try:
             new_embeddings = get_or_create_embeddings(
-                cache_file=CACHE_FILE,
+                cache_file=cache_file,
                 pdf_hashes=current_hashes,
                 embedding_model=embedding_model,
                 chunk_size=chunk_size,
@@ -119,7 +150,7 @@ def refresh_knowledge_base():
             )
         finally:
             # Also on failure, so partial embedding progress survives restarts.
-            push_cache()
+            push_cache(workspace_id)
 
         print(
             f"[timing] embeddings: {time.perf_counter() - started:.2f}s "
@@ -137,10 +168,14 @@ def refresh_knowledge_base():
             pdf_hashes=MappingProxyType(current_hashes),
             pdf_modified_time=MappingProxyType(current_modified_times),
         )
-        knowledge_base_state = refreshed_state
+
+        if workspace_id == DEFAULT_WORKSPACE_ID:
+            knowledge_base_state = refreshed_state
+        else:
+            _states[workspace_id] = refreshed_state
 
         print(
-            f"Knowledge base refreshed: "
+            f"Knowledge base refreshed [{workspace_id}]: "
             f"{len(pdf_paths)} PDF(s), "
             f"{len(refreshed_state.knowledge_base)} chunk(s)."
         )
@@ -209,10 +244,14 @@ def cosine_similarity(vector_a, vector_b):
     return float(np.dot(a, b) / denominator)
 
 
-def retrieve_document(question):
-    state = knowledge_base_state
+def retrieve_document(question, workspace_id=DEFAULT_WORKSPACE_ID):
+    state = get_state(workspace_id)
 
-    if not state.knowledge_base or not state.document_embeddings:
+    if (
+        state is None
+        or not state.knowledge_base
+        or not state.document_embeddings
+    ):
         return None, 0.0
 
     sub_questions = decompose_query(question)
