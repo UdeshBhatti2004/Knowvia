@@ -1,35 +1,45 @@
-
-import json
-
 from fastapi import HTTPException
+from pymongo.errors import PyMongoError
 
-from app.core.config import SOURCES_METADATA_FILE
+from app.core.db import get_db
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
+
+COLLECTION = "sources"
 
 
-def load_sources_metadata() -> dict:
-    if not SOURCES_METADATA_FILE.exists():
-        return {}
-
+def load_sources_metadata(workspace_id=DEFAULT_WORKSPACE_ID) -> dict:
     try:
-        with SOURCES_METADATA_FILE.open("r", encoding="utf-8") as file:
-            return json.load(file)
-    except (json.JSONDecodeError, OSError):
+        docs = get_db()[COLLECTION].find({"workspace_id": workspace_id})
+        return {doc["name"]: doc["record"] for doc in docs}
+    except PyMongoError as exc:
         raise HTTPException(
             status_code=500,
             detail="Unable to read uploaded-file metadata.",
-        )
+        ) from exc
 
 
-def save_sources_metadata(metadata: dict) -> None:
-    temporary_file = SOURCES_METADATA_FILE.with_suffix(".tmp")
-
+def save_sources_metadata(metadata: dict, workspace_id=DEFAULT_WORKSPACE_ID) -> None:
     try:
-        with temporary_file.open("w", encoding="utf-8") as file:
-            json.dump(metadata, file, indent=2)
+        collection = get_db()[COLLECTION]
 
-        temporary_file.replace(SOURCES_METADATA_FILE)
-    except OSError as exc:
-        temporary_file.unlink(missing_ok=True)
+        for name, record in metadata.items():
+            doc_id = f"{workspace_id}:{name}"
+            collection.replace_one(
+                {"_id": doc_id},
+                {
+                    "_id": doc_id,
+                    "workspace_id": workspace_id,
+                    "name": name,
+                    "record": record,
+                },
+                upsert=True,
+            )
+
+        # Records dropped from the dict are deleted, like the old file rewrite.
+        collection.delete_many(
+            {"workspace_id": workspace_id, "name": {"$nin": list(metadata)}}
+        )
+    except PyMongoError as exc:
         raise HTTPException(
             status_code=500,
             detail="Unable to save file metadata.",

@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -14,6 +15,7 @@ from app.api.routes.widget import router as widget_router
 from app.core.config import CORS_ORIGINS
 from app.knowledge.retrieval import refresh_knowledge_base
 from app.knowledge.startup import stop_retrying, warm_up
+from app.knowledge.storage_sync import restore_from_db
 from app.services.source_service import recover_interrupted_uploads
 
 
@@ -25,6 +27,9 @@ async def lifespan(app: FastAPI):
     # Uploads made after this moment belong to live background jobs, so
     # recovery must never touch them.
     started_at = datetime.now(timezone.utc)
+
+        # Pull PDFs and the embedding cache from the database before building.
+    await asyncio.to_thread(restore_from_db)
 
     def recover():
         changed = recover_interrupted_uploads(started_at)

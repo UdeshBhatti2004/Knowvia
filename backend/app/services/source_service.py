@@ -12,6 +12,7 @@ from app.core.config import (
     DOCUMENTS_DIR,
     MAX_UPLOAD_SIZE_BYTES,
 )
+from app.repositories.blob_store import delete_blob, put_blob
 from app.repositories.source_repository import (
     load_sources_metadata,
     save_sources_metadata,
@@ -19,8 +20,8 @@ from app.repositories.source_repository import (
 from app.knowledge.retrieval import refresh_knowledge_base
 
 
-# Several things now touch sources_metadata.json: normal requests AND the
-# background job. Each one does "read the file, change it, write it back".
+# Several things touch the sources metadata: normal requests AND the
+# background job. Each one does "read it, change it, write it back".
 # If two did that at the same moment, one would overwrite the other's change.
 # This lock makes them take turns.
 metadata_lock = threading.Lock()
@@ -75,7 +76,6 @@ def _remove_record(name: str, only_if_failed: bool = False) -> bool:
         return True
 
 
-
 def recover_interrupted_uploads(started_at: datetime) -> int:
     """Fix records left in "Processing" by a crash or restart.
 
@@ -124,7 +124,6 @@ def recover_interrupted_uploads(started_at: datetime) -> int:
     return changed
 
 
-
 def _find_duplicate(content_hash: str) -> str | None:
     """Return the name of a stored PDF with exactly this content, if any."""
     if not DOCUMENTS_DIR.is_dir():
@@ -161,6 +160,10 @@ async def process_upload(filename: str) -> None:
         print(f"Failed to process {filename}: {exc}")
         # Remove the file so the folder and the knowledge base agree.
         path.unlink(missing_ok=True)
+        try:
+            await asyncio.to_thread(delete_blob, "pdf", filename)
+        except Exception as db_exc:
+            print(f"Failed to remove {filename} from database: {db_exc}")
         new_status = "Failed"
     else:
         new_status = "Processed"
@@ -233,7 +236,18 @@ async def upload_source(
 
     destination.write_bytes(content)
 
-    # NEW: the record starts as "Processing", not "Processed".
+    # The database copy is the source of truth, so store it right away.
+    try:
+        await asyncio.to_thread(put_blob, "pdf", destination.name, content)
+    except Exception as exc:
+        destination.unlink(missing_ok=True)
+        print(f"Failed to store PDF in database: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save the file. Please try again.",
+        ) from exc
+
+    # The record starts as "Processing", not "Processed".
     record = {
         "filename": destination.name,
         "size": len(content),
@@ -247,13 +261,17 @@ async def upload_source(
     except Exception as exc:
         # If we cannot even record the file, undo the save and report it.
         destination.unlink(missing_ok=True)
+        try:
+            await asyncio.to_thread(delete_blob, "pdf", destination.name)
+        except Exception as db_exc:
+            print(f"Failed to remove PDF from database: {db_exc}")
         print(f"Failed to save source metadata: {exc}")
         raise HTTPException(
             status_code=500,
             detail="Unable to save file metadata. Please try again.",
         ) from exc
 
-    # NEW: schedule the slow embedding job. FastAPI runs it only after the
+    # Schedule the slow embedding job. FastAPI runs it only after the
     # reply below has been sent, so the browser does not wait for it.
     background_tasks.add_task(process_upload, destination.name)
 
@@ -280,7 +298,7 @@ async def delete_source(filename: str) -> dict:
     target = DOCUMENTS_DIR / safe_name
 
     if not target.is_file():
-        # NEW: a failed upload has no file left, only a "Failed" record.
+        # A failed upload has no file left, only a "Failed" record.
         # Deleting it just clears that record from the list.
         if _remove_record(safe_name, only_if_failed=True):
             return {
@@ -296,13 +314,29 @@ async def delete_source(filename: str) -> dict:
     # Keep a copy of the content so we can restore the file if refreshing
     # the knowledge base fails.
     content = target.read_bytes()
+
+    # Remove from the database first. If this fails, nothing has changed yet.
+    try:
+        await asyncio.to_thread(delete_blob, "pdf", safe_name)
+    except Exception as exc:
+        print(f"Failed to delete PDF from database: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete the document. Please try again.",
+        ) from exc
+
     target.unlink()
 
     try:
         await asyncio.to_thread(refresh_knowledge_base)
     except Exception as exc:
-        # Put the file back so the knowledge base and the folder agree.
+        # Put the file back, on disk and in the database, so the knowledge
+        # base, the folder and the database all agree.
         target.write_bytes(content)
+        try:
+            await asyncio.to_thread(put_blob, "pdf", safe_name, content)
+        except Exception as restore_exc:
+            print(f"Failed to restore PDF in database: {restore_exc}")
         print(f"Failed to refresh knowledge base after delete: {exc}")
         raise HTTPException(
             status_code=500,
@@ -353,7 +387,7 @@ def get_sources() -> dict:
                 }
             )
 
-    # NEW: failed uploads have no file on disk, so the loop above cannot
+    # Failed uploads have no file on disk, so the loop above cannot
     # see them. Add them from the metadata so the user can see the failure.
     for name, record in metadata.items():
         if name not in seen_files and record.get("status") == "Failed":

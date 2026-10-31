@@ -20,6 +20,7 @@ from app.core.config import (
 from app.knowledge.pdf_reader import extract_text_from_pdf
 from app.knowledge.chunking import chunk_pages
 from app.knowledge.cache_manager import get_or_create_embeddings
+from app.knowledge.storage_sync import push_cache
 
 
 embedding_model = "gemini-embedding-2"
@@ -103,18 +104,22 @@ def refresh_knowledge_base():
         )
 
         started = time.perf_counter()
-        new_embeddings = get_or_create_embeddings(
-            cache_file=CACHE_FILE,
-            pdf_hashes=current_hashes,
-            embedding_model=embedding_model,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            knowledge_base=new_knowledge_base,
-            get_embedding=get_embedding,
-            pdf_modified_times=current_modified_times,
-            max_workers=4,
-            requests_per_minute=90,
-        )
+        try:
+            new_embeddings = get_or_create_embeddings(
+                cache_file=CACHE_FILE,
+                pdf_hashes=current_hashes,
+                embedding_model=embedding_model,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                knowledge_base=new_knowledge_base,
+                get_embedding=get_embedding,
+                pdf_modified_times=current_modified_times,
+                max_workers=4,
+                requests_per_minute=90,
+            )
+        finally:
+            # Also on failure, so partial embedding progress survives restarts.
+            push_cache()
 
         print(
             f"[timing] embeddings: {time.perf_counter() - started:.2f}s "
