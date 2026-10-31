@@ -57,6 +57,10 @@ def create_app() -> FastAPI:
     def home():
         return {"message": "Knowvia API is running"}
 
+    @app.api_route("/health", methods=["GET", "HEAD"])
+    def health():
+        return {"status": "ok"}
+
     admin = [Depends(require_admin)]
 
     # Dashboard API: admin token required.
@@ -71,6 +75,9 @@ def create_app() -> FastAPI:
     app.include_router(widget_router)
 
     return app
+
+
+
 
 
 app = create_app()
