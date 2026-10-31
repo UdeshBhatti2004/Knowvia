@@ -52,3 +52,15 @@ LOGIN_RATE_LIMITS = [(60, 5), (3600, 20)]
 # Never set it above 0 if clients can reach the app directly, or the
 # X-Forwarded-For header can be spoofed.
 TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+
+
+# Browser origins allowed to call the API (comma-separated in env).
+# Defaults to local dev. In production set CORS_ORIGINS=https://your-frontend-domain
+DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+
+
+def parse_origins(raw):
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
+CORS_ORIGINS = parse_origins(os.getenv("CORS_ORIGINS") or DEFAULT_CORS_ORIGINS)

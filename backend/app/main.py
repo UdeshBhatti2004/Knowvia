@@ -11,9 +11,11 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.public import router as public_router
 from app.api.routes.sources import router as sources_router
 from app.api.routes.widget import router as widget_router
+from app.core.config import CORS_ORIGINS
 from app.knowledge.retrieval import refresh_knowledge_base
 from app.knowledge.startup import stop_retrying, warm_up
 from app.services.source_service import recover_interrupted_uploads
+
 
 
 @asynccontextmanager
@@ -40,10 +42,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        allow_origins=CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
