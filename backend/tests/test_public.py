@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch
 
 import pytest
@@ -6,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.api.routes import public as public_route
 from app.main import app
-from app.repositories import assistant_repository, widget_repository
+from app.repositories.widget_repository import load_widget_settings
 from app.services.rate_limiter import RateLimiter
 
 client = TestClient(app)
@@ -22,20 +21,10 @@ FAKE_RESULT = {
 
 
 @pytest.fixture(autouse=True)
-def isolated(tmp_path):
-    """Temp settings files and a fresh limiter, so real data is never touched."""
-    with (
-        patch.object(
-            widget_repository, "WIDGET_SETTINGS_FILE", tmp_path / "widget.json"
-        ),
-        patch.object(
-            assistant_repository,
-            "ASSISTANT_SETTINGS_FILE",
-            tmp_path / "assistant.json",
-        ),
-        patch.object(public_route, "limiter", RateLimiter([(60, 3)])),
-    ):
-        yield tmp_path
+def fresh_limiter():
+    """Fresh limiter per test. Settings are isolated by the fake_mongo fixture."""
+    with patch.object(public_route, "limiter", RateLimiter([(60, 3)])):
+        yield
 
 
 def widget_key():
@@ -46,14 +35,13 @@ def auth():
     return {"X-Widget-Key": widget_key()}
 
 
-def test_key_is_created_once_and_persisted(isolated):
+def test_key_is_created_once_and_persisted():
     first = widget_key()
     second = widget_key()
 
     assert first.startswith("wk_")
     assert first == second
-    saved = json.loads((isolated / "widget.json").read_text(encoding="utf-8"))
-    assert saved["public_key"] == first
+    assert load_widget_settings()["public_key"] == first
 
 
 def test_public_endpoints_reject_missing_or_wrong_key():

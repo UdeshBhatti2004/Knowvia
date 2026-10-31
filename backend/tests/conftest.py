@@ -13,3 +13,12 @@ def bypass_admin_auth(request):
     app.dependency_overrides[require_admin] = lambda: None
     yield
     app.dependency_overrides.pop(require_admin, None)
+
+@pytest.fixture(autouse=True)
+def fake_mongo(monkeypatch):
+    """Every test gets a fresh in-memory Mongo, never the real Atlas."""
+    import mongomock
+
+    from app.core import db
+
+    monkeypatch.setattr(db, "_client", mongomock.MongoClient())

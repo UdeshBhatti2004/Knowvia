@@ -65,3 +65,7 @@ def parse_origins(raw):
 
 
 CORS_ORIGINS = parse_origins(os.getenv("CORS_ORIGINS") or DEFAULT_CORS_ORIGINS)
+
+# MongoDB (Atlas). Both are read from .env / host env vars.
+MONGODB_URI = os.getenv("MONGODB_URI")
+MONGODB_DB = os.getenv("MONGODB_DB") or "knowvia"

@@ -1,21 +1,10 @@
-﻿from unittest.mock import patch
-
-import pytest
+﻿import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.repositories import widget_repository
 from app.services.domain_service import normalize_domain
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def isolated(tmp_path):
-    with patch.object(
-        widget_repository, "WIDGET_SETTINGS_FILE", tmp_path / "widget.json"
-    ):
-        yield
 
 
 def test_domains_default_empty():
