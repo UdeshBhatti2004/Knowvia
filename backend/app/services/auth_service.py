@@ -37,22 +37,37 @@ def check_password(candidate: str) -> bool:
     )
 
 
-def create_token(ttl_seconds: int | None = None) -> str:
+def create_token(
+    ttl_seconds: int | None = None,
+    user_id: str | None = None,
+    workspace_id: str | None = None,
+) -> str:
     ttl = config.AUTH_TOKEN_TTL_SECONDS if ttl_seconds is None else ttl_seconds
-    payload = json.dumps({"exp": int(time.time()) + ttl}).encode("utf-8")
-    body = _b64(payload)
+    claims = {"exp": int(time.time()) + ttl}
+    if user_id:
+        claims["user_id"] = user_id
+    if workspace_id:
+        claims["workspace_id"] = workspace_id
+    body = _b64(json.dumps(claims).encode("utf-8"))
     return f"{body}.{_sign(body)}"
 
 
-def verify_token(token: str) -> bool:
+def decode_token(token: str) -> dict | None:
+    """Return the claims if the token is valid and unexpired, else None."""
     if not config.AUTH_SECRET:
-        return False
+        return None
 
     try:
         body, signature = token.split(".", 1)
         if not hmac.compare_digest(signature, _sign(body)):
-            return False
+            return None
         payload = json.loads(_unb64(body))
-        return int(payload["exp"]) > time.time()
+        if int(payload["exp"]) <= time.time():
+            return None
+        return payload
     except (ValueError, KeyError, TypeError):
-        return False
+        return None
+
+
+def verify_token(token: str) -> bool:
+    return decode_token(token) is not None
