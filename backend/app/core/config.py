@@ -21,18 +21,19 @@ if not GEMINI_API_KEY:
         "Check the .env file in the project root."
     )
 
-# Storage paths
-DOCUMENTS_DIR = BACKEND_DIR / "documents"
-CACHE_FILE = BACKEND_DIR / "documents_embedding.pkl"
-SOURCES_METADATA_FILE = DOCUMENTS_DIR / "sources_metadata.json"
+# Storage paths. In production set DATA_DIR to the mounted volume path
+# (for example /data) so documents, cache and settings survive restarts.
+DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
+DOCUMENTS_DIR = DATA_DIR / "documents"
+DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-WIDGET_SETTINGS_FILE = BACKEND_DIR / "widget_settings.json"
+CACHE_FILE = DATA_DIR / "documents_embedding.pkl"
+SOURCES_METADATA_FILE = DOCUMENTS_DIR / "sources_metadata.json"
+WIDGET_SETTINGS_FILE = DATA_DIR / "widget_settings.json"
+ASSISTANT_SETTINGS_FILE = DATA_DIR / "assistant_settings.json"
 
 # Public widget limits: (window in seconds, max requests) per visitor IP.
 PUBLIC_RATE_LIMITS = [(60, 10), (86400, 100)]
-
-
-ASSISTANT_SETTINGS_FILE = BACKEND_DIR / "assistant_settings.json"
 
 # Upload settings
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
