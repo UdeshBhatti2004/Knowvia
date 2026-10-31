@@ -1,14 +1,10 @@
-# APIRouter groups related URLs together (here: everything under /sources).
-# BackgroundTasks lets us run a job AFTER the reply has been sent to the browser.
-# File and UploadFile are how FastAPI receives an uploaded file.
-from fastapi import APIRouter, BackgroundTasks, File, UploadFile
+import asyncio
 
-# The shape of the data that GET /sources must return.
-# It also restricts "status" to the allowed values (Processing, Processed, Failed).
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
+
+from app.api.auth import require_user
+from app.knowledge.workspace_loader import ensure_loaded
 from app.schemas.source import SourceListResponse
-
-# The real work lives in the service file. Routes stay thin:
-# they only receive the request and pass it on.
 from app.services.source_service import (
     delete_source,
     get_sources,
@@ -21,24 +17,23 @@ router = APIRouter()
 
 @router.post("/sources/upload")
 async def upload_source_route(
-    # FastAPI creates this object for each request and passes it in here.
-    # We hand it to the service so the service can schedule the embedding job.
     background_tasks: BackgroundTasks,
-    # The PDF the user uploaded. "..." means it is required.
     file: UploadFile = File(...),
+    workspace_id: str = Depends(require_user),
 ):
-    # NEW: we now also pass background_tasks. The service will reply right away
-    # and run the slow embedding work later, in the background.
-    return await upload_source(file, background_tasks)
+    await asyncio.to_thread(ensure_loaded, workspace_id)
+    return await upload_source(file, background_tasks, workspace_id)
 
 
-# response_model makes FastAPI check the output against SourceListResponse,
-# so a wrong status value would be caught instead of reaching the frontend.
 @router.get("/sources", response_model=SourceListResponse)
-def get_sources_route():
-    return get_sources()
+def get_sources_route(workspace_id: str = Depends(require_user)):
+    ensure_loaded(workspace_id)
+    return get_sources(workspace_id)
 
 
 @router.delete("/sources/{filename}")
-async def delete_source_route(filename: str):
-    return await delete_source(filename)
+async def delete_source_route(
+    filename: str, workspace_id: str = Depends(require_user)
+):
+    await asyncio.to_thread(ensure_loaded, workspace_id)
+    return await delete_source(filename, workspace_id)

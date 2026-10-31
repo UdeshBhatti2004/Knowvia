@@ -4,65 +4,104 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-# BackgroundTasks lets us run a job AFTER the reply has been sent.
 from fastapi import BackgroundTasks, HTTPException, UploadFile
 
 from app.core.config import (
     ALLOWED_UPLOAD_EXTENSIONS,
+    CACHE_FILE,
     DOCUMENTS_DIR,
     MAX_UPLOAD_SIZE_BYTES,
 )
+from app.knowledge.retrieval import refresh_knowledge_base
+from app.knowledge.workspace_paths import workspace_paths
 from app.repositories.blob_store import delete_blob, put_blob
+from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.repositories.source_repository import (
     load_sources_metadata,
     save_sources_metadata,
 )
-from app.knowledge.retrieval import refresh_knowledge_base
 
 
-# Several things touch the sources metadata: normal requests AND the
-# background job. Each one does "read it, change it, write it back".
-# If two did that at the same moment, one would overwrite the other's change.
-# This lock makes them take turns.
+# Normal requests AND background jobs all do "read, change, write back" on
+# the sources metadata. This lock makes them take turns.
 metadata_lock = threading.Lock()
 
 
-def _set_record(name: str, record: dict) -> None:
+def _docs_dir(workspace_id: str) -> Path:
+    return workspace_paths(workspace_id, DOCUMENTS_DIR, CACHE_FILE)[0]
+
+
+def _refresh(workspace_id: str) -> None:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        refresh_knowledge_base()
+    else:
+        refresh_knowledge_base(workspace_id)
+
+
+def _load(workspace_id: str) -> dict:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return load_sources_metadata()
+    return load_sources_metadata(workspace_id)
+
+
+def _save(metadata: dict, workspace_id: str) -> None:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        save_sources_metadata(metadata)
+    else:
+        save_sources_metadata(metadata, workspace_id)
+
+
+def _put(name: str, data: bytes, workspace_id: str) -> None:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        put_blob("pdf", name, data)
+    else:
+        put_blob("pdf", name, data, workspace_id)
+
+
+def _delete(name: str, workspace_id: str) -> None:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        delete_blob("pdf", name)
+    else:
+        delete_blob("pdf", name, workspace_id)
+
+
+def _set_record(
+    name: str, record: dict, workspace_id: str = DEFAULT_WORKSPACE_ID
+) -> None:
     """Add or replace the metadata record for one file."""
     with metadata_lock:
-        metadata = load_sources_metadata()
+        metadata = _load(workspace_id)
         metadata[name] = record
-        save_sources_metadata(metadata)
+        _save(metadata, workspace_id)
 
 
-def _set_status(name: str, status: str) -> None:
+def _set_status(
+    name: str, status: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+) -> None:
     """Change only the status of an existing record.
 
-    If the record no longer exists (the user deleted the document while it
-    was processing), do nothing. Otherwise we would bring a deleted
-    document back to life.
+    If the record no longer exists (deleted while processing), do nothing,
+    so a deleted document is never brought back to life.
     """
     with metadata_lock:
-        metadata = load_sources_metadata()
+        metadata = _load(workspace_id)
         record = metadata.get(name)
 
         if record is None:
             return
 
-        # Copy the old record and overwrite just the status field.
         metadata[name] = {**record, "status": status}
-        save_sources_metadata(metadata)
+        _save(metadata, workspace_id)
 
 
-def _remove_record(name: str, only_if_failed: bool = False) -> bool:
-    """Delete a metadata record. Returns True if something was removed.
-
-    only_if_failed=True is used when a file is already gone from disk: we
-    only clear the record if it is a "Failed" one, so we never hide a
-    record that should still be there.
-    """
+def _remove_record(
+    name: str,
+    only_if_failed: bool = False,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
+) -> bool:
+    """Delete a metadata record. Returns True if something was removed."""
     with metadata_lock:
-        metadata = load_sources_metadata()
+        metadata = _load(workspace_id)
         record = metadata.get(name)
 
         if record is None:
@@ -72,21 +111,16 @@ def _remove_record(name: str, only_if_failed: bool = False) -> bool:
             return False
 
         del metadata[name]
-        save_sources_metadata(metadata)
+        _save(metadata, workspace_id)
         return True
 
 
 def recover_interrupted_uploads(started_at: datetime) -> int:
-    """Fix records left in "Processing" by a crash or restart.
+    """Fix records left in "Processing" by a crash or restart (default
+    workspace, called after the startup refresh succeeds).
 
-    Call this only AFTER a successful knowledge-base refresh. The refresh
-    embeds every PDF in the documents folder, so:
-      - PDF still on disk  -> it was embedded -> "Processed"
-      - PDF missing        -> nothing to use   -> "Failed" (user can clear it)
-
-    Only records uploaded BEFORE started_at are touched. A newer "Processing"
-    record belongs to a live background job, which will set its own status.
-    Returns how many records were changed.
+    Only records uploaded BEFORE started_at are touched. A newer
+    "Processing" record belongs to a live background job.
     """
     changed = 0
 
@@ -100,12 +134,9 @@ def recover_interrupted_uploads(started_at: datetime) -> int:
             try:
                 uploaded_at = datetime.fromisoformat(record["uploaded_at"])
             except (KeyError, TypeError, ValueError):
-                # No usable timestamp: it cannot be a live job, so recover it.
                 uploaded_at = None
             else:
                 if uploaded_at.tzinfo is None:
-                    # No timezone stored. Every timestamp this app writes is
-                    # UTC, so assume UTC instead of crashing on the compare.
                     uploaded_at = uploaded_at.replace(tzinfo=timezone.utc)
 
             if uploaded_at is not None and uploaded_at >= started_at:
@@ -124,44 +155,37 @@ def recover_interrupted_uploads(started_at: datetime) -> int:
     return changed
 
 
-def _find_duplicate(content_hash: str) -> str | None:
+def _find_duplicate(content_hash: str, docs_dir: Path) -> str | None:
     """Return the name of a stored PDF with exactly this content, if any."""
-    if not DOCUMENTS_DIR.is_dir():
+    if not docs_dir.is_dir():
         return None
 
-    for path in DOCUMENTS_DIR.iterdir():
+    for path in docs_dir.iterdir():
         if not path.is_file() or path.suffix.lower() != ".pdf":
             continue
 
-        # Same hash = same content, whatever the file is called.
         if hashlib.sha256(path.read_bytes()).hexdigest() == content_hash:
             return path.name
 
     return None
 
 
-async def process_upload(filename: str) -> None:
-    """Background job: embed the uploaded PDF, then record the outcome.
+async def process_upload(
+    filename: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+) -> None:
+    """Background job: embed the uploaded PDF, then record the outcome."""
+    path = _docs_dir(workspace_id) / filename
 
-    This runs AFTER the browser already got its reply, so it can take as
-    long as it needs (including the rate-limit pauses).
-    """
-    path = DOCUMENTS_DIR / filename
-
-    # The user deleted the file before this job even started: nothing to do.
     if not path.is_file():
         return
 
     try:
-        # refresh_knowledge_base is slow and blocking, so we run it in a
-        # separate thread. This keeps the server responsive to other users.
-        await asyncio.to_thread(refresh_knowledge_base)
+        await asyncio.to_thread(_refresh, workspace_id)
     except Exception as exc:
         print(f"Failed to process {filename}: {exc}")
-        # Remove the file so the folder and the knowledge base agree.
         path.unlink(missing_ok=True)
         try:
-            await asyncio.to_thread(delete_blob, "pdf", filename)
+            await asyncio.to_thread(_delete, filename, workspace_id)
         except Exception as db_exc:
             print(f"Failed to remove {filename} from database: {db_exc}")
         new_status = "Failed"
@@ -169,19 +193,16 @@ async def process_upload(filename: str) -> None:
         new_status = "Processed"
 
     try:
-        _set_status(filename, new_status)
+        _set_status(filename, new_status, workspace_id)
     except Exception as exc:
-        # Nobody is waiting for this job, so we can only log the problem.
         print(f"Failed to update status of {filename}: {exc}")
 
 
 async def upload_source(
     file: UploadFile,
     background_tasks: BackgroundTasks,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict:
-    # --- Validation (same checks as before) ---
-
-    # Only .pdf file names are accepted.
     if (
         not file.filename
         or Path(file.filename).suffix.lower()
@@ -194,7 +215,6 @@ async def upload_source(
 
     content = await file.read()
 
-    # A real PDF starts with "%PDF-". This catches renamed non-PDF files.
     if not content.startswith(b"%PDF-"):
         raise HTTPException(
             status_code=400,
@@ -207,10 +227,13 @@ async def upload_source(
             detail="PDF files must be 10 MB or smaller.",
         )
 
-    # Refuse the same content under a different name.
+    docs_dir = _docs_dir(workspace_id)
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
     duplicate_name = await asyncio.to_thread(
         _find_duplicate,
         hashlib.sha256(content).hexdigest(),
+        docs_dir,
     )
 
     if duplicate_name:
@@ -222,9 +245,7 @@ async def upload_source(
             ),
         )
 
-    # Path(...).name strips any folder parts, so a name like
-    # "../../x.pdf" cannot escape the documents folder.
-    destination = DOCUMENTS_DIR / Path(file.filename).name
+    destination = docs_dir / Path(file.filename).name
 
     if destination.exists():
         raise HTTPException(
@@ -232,13 +253,11 @@ async def upload_source(
             detail="A file with this name already exists.",
         )
 
-    # --- Save quickly, process later ---
-
     destination.write_bytes(content)
 
     # The database copy is the source of truth, so store it right away.
     try:
-        await asyncio.to_thread(put_blob, "pdf", destination.name, content)
+        await asyncio.to_thread(_put, destination.name, content, workspace_id)
     except Exception as exc:
         destination.unlink(missing_ok=True)
         print(f"Failed to store PDF in database: {exc}")
@@ -247,7 +266,6 @@ async def upload_source(
             detail="Unable to save the file. Please try again.",
         ) from exc
 
-    # The record starts as "Processing", not "Processed".
     record = {
         "filename": destination.name,
         "size": len(content),
@@ -257,12 +275,11 @@ async def upload_source(
     }
 
     try:
-        _set_record(destination.name, record)
+        _set_record(destination.name, record, workspace_id)
     except Exception as exc:
-        # If we cannot even record the file, undo the save and report it.
         destination.unlink(missing_ok=True)
         try:
-            await asyncio.to_thread(delete_blob, "pdf", destination.name)
+            await asyncio.to_thread(_delete, destination.name, workspace_id)
         except Exception as db_exc:
             print(f"Failed to remove PDF from database: {db_exc}")
         print(f"Failed to save source metadata: {exc}")
@@ -271,9 +288,10 @@ async def upload_source(
             detail="Unable to save file metadata. Please try again.",
         ) from exc
 
-    # Schedule the slow embedding job. FastAPI runs it only after the
-    # reply below has been sent, so the browser does not wait for it.
-    background_tasks.add_task(process_upload, destination.name)
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        background_tasks.add_task(process_upload, destination.name)
+    else:
+        background_tasks.add_task(process_upload, destination.name, workspace_id)
 
     return {
         "message": "PDF received. Processing has started.",
@@ -281,8 +299,9 @@ async def upload_source(
     }
 
 
-async def delete_source(filename: str) -> dict:
-    # Only a plain "name.pdf" is accepted: no folders, no "..", no other types.
+async def delete_source(
+    filename: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+) -> dict:
     safe_name = Path(filename).name
 
     if (
@@ -295,12 +314,11 @@ async def delete_source(filename: str) -> dict:
             detail="Invalid file name.",
         )
 
-    target = DOCUMENTS_DIR / safe_name
+    target = _docs_dir(workspace_id) / safe_name
 
     if not target.is_file():
         # A failed upload has no file left, only a "Failed" record.
-        # Deleting it just clears that record from the list.
-        if _remove_record(safe_name, only_if_failed=True):
+        if _remove_record(safe_name, True, workspace_id):
             return {
                 "message": "Document deleted.",
                 "filename": safe_name,
@@ -311,13 +329,11 @@ async def delete_source(filename: str) -> dict:
             detail="Document not found.",
         )
 
-    # Keep a copy of the content so we can restore the file if refreshing
-    # the knowledge base fails.
     content = target.read_bytes()
 
     # Remove from the database first. If this fails, nothing has changed yet.
     try:
-        await asyncio.to_thread(delete_blob, "pdf", safe_name)
+        await asyncio.to_thread(_delete, safe_name, workspace_id)
     except Exception as exc:
         print(f"Failed to delete PDF from database: {exc}")
         raise HTTPException(
@@ -328,13 +344,11 @@ async def delete_source(filename: str) -> dict:
     target.unlink()
 
     try:
-        await asyncio.to_thread(refresh_knowledge_base)
+        await asyncio.to_thread(_refresh, workspace_id)
     except Exception as exc:
-        # Put the file back, on disk and in the database, so the knowledge
-        # base, the folder and the database all agree.
         target.write_bytes(content)
         try:
-            await asyncio.to_thread(put_blob, "pdf", safe_name, content)
+            await asyncio.to_thread(_put, safe_name, content, workspace_id)
         except Exception as restore_exc:
             print(f"Failed to restore PDF in database: {restore_exc}")
         print(f"Failed to refresh knowledge base after delete: {exc}")
@@ -343,10 +357,8 @@ async def delete_source(filename: str) -> dict:
             detail="Unable to delete the document. Please try again.",
         ) from exc
 
-    # The file is gone and search is updated. A leftover metadata entry is
-    # harmless (the list only shows files that exist), so don't fail on it.
     try:
-        _remove_record(safe_name)
+        _remove_record(safe_name, False, workspace_id)
     except Exception as exc:
         print(f"Failed to remove source metadata: {exc}")
 
@@ -356,13 +368,15 @@ async def delete_source(filename: str) -> dict:
     }
 
 
-def get_sources() -> dict:
-    metadata = load_sources_metadata()
+def get_sources(workspace_id: str = DEFAULT_WORKSPACE_ID) -> dict:
+    metadata = _load(workspace_id)
+    docs_dir = _docs_dir(workspace_id)
     sources = []
-    # Remember which files exist on disk, to find "Failed" records later.
     seen_files = set()
 
-    for path in DOCUMENTS_DIR.iterdir():
+    paths = docs_dir.iterdir() if docs_dir.is_dir() else []
+
+    for path in paths:
         if not path.is_file() or path.suffix.lower() != ".pdf":
             continue
 
@@ -372,8 +386,7 @@ def get_sources() -> dict:
         if record:
             sources.append(record)
         else:
-            # Old files from before metadata existed: build a record from
-            # the file itself and mark the date as estimated.
+            # Old files from before metadata existed.
             sources.append(
                 {
                     "filename": path.name,
@@ -387,13 +400,11 @@ def get_sources() -> dict:
                 }
             )
 
-    # Failed uploads have no file on disk, so the loop above cannot
-    # see them. Add them from the metadata so the user can see the failure.
+    # Failed uploads have no file on disk, so add them from the metadata.
     for name, record in metadata.items():
         if name not in seen_files and record.get("status") == "Failed":
             sources.append(record)
 
-    # Newest first.
     sources.sort(
         key=lambda source: source.get("uploaded_at", ""),
         reverse=True,
