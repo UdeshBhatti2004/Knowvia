@@ -24,12 +24,18 @@ def require_admin(authorization: str | None = Header(default=None)) -> None:
         raise _unauthorized()
 
 
-def require_user(authorization: str | None = Header(default=None)) -> str:
-    """Return the caller's workspace id. Admin tokens map to "default"."""
+def require_claims(authorization: str | None = Header(default=None)) -> dict:
+    """Return the token's claims, or 401."""
     token = _bearer(authorization)
     claims = decode_token(token) if token else None
 
     if claims is None:
         raise _unauthorized()
 
+    return claims
+
+
+def require_user(authorization: str | None = Header(default=None)) -> str:
+    """Return the caller's workspace id. Admin tokens map to "default"."""
+    claims = require_claims(authorization)
     return claims.get("workspace_id") or DEFAULT_WORKSPACE_ID

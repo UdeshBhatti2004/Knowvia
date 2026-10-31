@@ -1,4 +1,5 @@
-﻿import {
+﻿import { useEffect, useState } from 'react'
+import {
   BrainCircuit,
   LayoutDashboard,
   Files,
@@ -13,7 +14,7 @@
   LogOut,
 } from 'lucide-react'
 
-import { logout } from '../../services/api'
+import { getMe, logout } from '../../services/api'
 
 const navigationItems = [
   { label: 'Overview', icon: LayoutDashboard },
@@ -36,6 +37,15 @@ function Sidebar({
     onNavigate?.(label)
     onClose?.()
   }
+
+  const [me, setMe] = useState(null)
+
+  useEffect(() => {
+    getMe().then(setMe).catch(() => {})
+  }, [])
+
+  const workspaceName = me?.workspace_name || 'My Workspace'
+  const accountLabel = me?.email || 'My Account'
 
   // Collapsed only applies on lg+. The mobile drawer is always full width with labels.
   const hideWhenCollapsed = isCollapsed ? 'lg:hidden' : ''
@@ -108,20 +118,20 @@ function Sidebar({
           </button>
         </div>
 
-        {/* Workspace tile (static until multi-tenant is decided) */}
+        {/* Workspace tile */}
         <div className="shrink-0 p-2.5">
           <div
-            title={isCollapsed ? 'My Workspace' : undefined}
+            title={isCollapsed ? workspaceName : undefined}
             className={`flex w-full items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2 ${
               isCollapsed ? 'lg:justify-center lg:gap-0' : ''
             }`}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-sm font-medium text-violet-200">
-              W
+              {workspaceName[0].toUpperCase()}
             </div>
 
             <div className={`min-w-0 flex-1 text-left ${hideWhenCollapsed}`}>
-              <p className="truncate text-xs font-medium">My Workspace</p>
+              <p className="truncate text-xs font-medium">{workspaceName}</p>
               <p className="mt-0.5 text-[11px] text-zinc-500">Free plan</p>
             </div>
           </div>
@@ -173,17 +183,19 @@ function Sidebar({
             }`}
           >
             <div
-              title={isCollapsed ? 'My Account' : undefined}
+              title={isCollapsed ? accountLabel : undefined}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-semibold"
             >
-              U
+              {accountLabel[0].toUpperCase()}
             </div>
 
             <div className={`min-w-0 flex-1 ${hideWhenCollapsed}`}>
               <p className="truncate text-xs font-medium text-zinc-200">
-                My Account
+                {accountLabel}
               </p>
-              <p className="text-[10px] text-zinc-500">Personal workspace</p>
+              <p className="text-[10px] text-zinc-500">
+                {me?.is_admin ? 'Admin' : 'Owner'}
+              </p>
             </div>
 
             {!isCollapsed && (

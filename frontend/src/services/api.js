@@ -28,6 +28,12 @@ export async function apiFetch(url, options = {}) {
   return response
 }
 
+export async function getMe() {
+  const response = await apiFetch(`${API_URL}/auth/me`)
+  if (!response.ok) throw new Error('Could not load account.')
+  return response.json()
+}
+
 async function authRequest(path, body, errors) {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',

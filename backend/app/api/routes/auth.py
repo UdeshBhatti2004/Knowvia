@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.api.auth import require_admin
+from app.api.auth import require_claims
 from app.api.client_ip import get_client_ip
 from app.core import config
 from app.core.passwords import hash_password, verify_password
@@ -115,6 +115,29 @@ def _user_login(email: str, password: str):
     }
 
 
-@router.get("/me", dependencies=[Depends(require_admin)])
-def me_route():
-    return {"ok": True}
+@router.get("/me")
+def me_route(claims: dict = Depends(require_claims)):
+    user_id = claims.get("user_id")
+
+    if not user_id:
+        return {
+            "ok": True,
+            "email": None,
+            "workspace_id": "default",
+            "workspace_name": "Admin",
+            "is_admin": True,
+        }
+
+    user = user_repository.get_by_id(user_id)
+    workspace = workspace_repository.get_by_id(claims.get("workspace_id") or "")
+
+    if not user or not workspace:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+
+    return {
+        "ok": True,
+        "email": user["email"],
+        "workspace_id": workspace["_id"],
+        "workspace_name": workspace["name"],
+        "is_admin": False,
+    }
