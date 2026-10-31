@@ -8,6 +8,7 @@ from app.services.domain_service import (
     set_allowed_domains,
 )
 from app.services.widget_service import get_public_key
+from app.services.widget_service import get_public_key, resolve_workspace
 
 router = APIRouter()
 
@@ -22,10 +23,17 @@ def get_widget_route(workspace_id: str = Depends(require_user)):
 
 
 @router.get("/widget/domains")
-def get_domains_route():
-    # Public (the Vercel middleware calls it). Per-workspace lookup by
-    # widget key comes in the next step; for now it serves "default".
-    return {"domains": get_allowed_domains()}
+def get_domains_route(key: str | None = None):
+    # Public (the Vercel middleware calls it). With ?key=<widget key> it
+    # returns that workspace's domains; without it, the "default" workspace.
+    if key is None:
+        return {"domains": get_allowed_domains()}
+
+    workspace_id = resolve_workspace(key)
+    if workspace_id is None:
+        raise HTTPException(status_code=404, detail="Unknown widget key.")
+
+    return {"domains": get_allowed_domains(workspace_id)}
 
 
 @router.put("/widget/domains")

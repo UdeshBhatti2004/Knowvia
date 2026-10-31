@@ -14,12 +14,17 @@ function toOrigin(entry) {
   return v.includes("://") ? v : `https://${v}`;
 }
 
-export default async function middleware() {
+export default async function middleware(request) {
   let ancestors;
   try {
+    const key = new URL(request.url).searchParams.get("key");
+    const url = key
+      ? `${API_URL}/widget/domains?key=${encodeURIComponent(key)}`
+      : `${API_URL}/widget/domains`;
+
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`${API_URL}/widget/domains`, {
+    const res = await fetch(url, {
       signal: ctrl.signal,
       cache: "no-store",
     });
@@ -31,7 +36,7 @@ export default async function middleware() {
     if (domains.length === 0) return next();
     ancestors = ["'self'", ...domains];
   } catch {
-    // Backend unreachable: fail closed
+    // Unknown key or backend unreachable: fail closed
     ancestors = ["'self'"];
   }
   return next({

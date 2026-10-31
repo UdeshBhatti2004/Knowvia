@@ -40,3 +40,16 @@ def is_valid_key(candidate: str) -> bool:
         candidate.encode("utf-8"),
         get_public_key().encode("utf-8"),
     )
+
+
+def resolve_workspace(candidate: str) -> str | None:
+    """Return the workspace id for a widget key, or None if it's unknown."""
+    if not candidate:
+        return None
+
+    # Legacy key of the "default" workspace.
+    if is_valid_key(candidate):
+        return DEFAULT_WORKSPACE_ID
+
+    workspace = workspace_repository.get_by_widget_key(candidate)
+    return workspace["_id"] if workspace else None
