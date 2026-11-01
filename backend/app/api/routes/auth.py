@@ -31,6 +31,10 @@ class SignupRequest(BaseModel):
     workspace_name: str = Field(min_length=1, max_length=100)
 
 
+class WorkspaceUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
 def _throttle(rate_limiter: RateLimiter, request: Request) -> None:
     wait = rate_limiter.check(get_client_ip(request))
     if wait:
@@ -141,3 +145,25 @@ def me_route(claims: dict = Depends(require_claims)):
         "workspace_name": workspace["name"],
         "is_admin": False,
     }
+
+
+@router.put("/workspace")
+def update_workspace_route(
+    payload: WorkspaceUpdate, claims: dict = Depends(require_claims)
+):
+    workspace_id = claims.get("workspace_id")
+
+    if not claims.get("user_id") or not workspace_id:
+        raise HTTPException(
+            status_code=403, detail="Admin has no workspace to rename."
+        )
+
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name can't be empty.")
+
+    workspace = workspace_repository.rename_workspace(workspace_id, name)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found.")
+
+    return {"ok": True, "workspace_name": workspace["name"]}

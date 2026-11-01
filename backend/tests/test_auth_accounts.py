@@ -114,3 +114,41 @@ def test_me_admin_token(monkeypatch):
 
 def test_me_requires_token():
     assert client.get("/auth/me").status_code == 401
+
+
+def _auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_rename_workspace():
+    token = signup(name="Old Name").json()["token"]
+    res = client.put(
+        "/auth/workspace", json={"name": "  New Name  "}, headers=_auth(token)
+    )
+    assert res.status_code == 200
+    assert res.json()["workspace_name"] == "New Name"
+    me = client.get("/auth/me", headers=_auth(token)).json()
+    assert me["workspace_name"] == "New Name"
+
+
+def test_rename_workspace_validation():
+    token = signup().json()["token"]
+    assert (
+        client.put("/auth/workspace", json={"name": ""}, headers=_auth(token)).status_code
+        == 422
+    )
+    assert (
+        client.put("/auth/workspace", json={"name": "   "}, headers=_auth(token)).status_code
+        == 422
+    )
+
+
+def test_rename_workspace_admin_forbidden(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
+    token = client.post("/auth/login", json={"password": "adminpass"}).json()["token"]
+    res = client.put("/auth/workspace", json={"name": "X"}, headers=_auth(token))
+    assert res.status_code == 403
+
+
+def test_rename_workspace_requires_token():
+    assert client.put("/auth/workspace", json={"name": "X"}).status_code == 401

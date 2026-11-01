@@ -36,3 +36,13 @@ def get_by_owner(owner_id: str) -> dict | None:
 
 def get_by_widget_key(widget_key: str) -> dict | None:
     return _col().find_one({"widget_key": widget_key})
+
+
+def rename_workspace(workspace_id: str, name: str) -> dict | None:
+    """Rename a workspace. Returns the updated doc, or None if not found."""
+    result = _col().update_one(
+        {"_id": workspace_id}, {"$set": {"name": name.strip()}}
+    )
+    if result.matched_count == 0:
+        return None
+    return get_by_id(workspace_id)
