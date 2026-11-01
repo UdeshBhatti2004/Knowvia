@@ -41,7 +41,10 @@ function Sidebar({
   const [me, setMe] = useState(null)
 
   useEffect(() => {
-    getMe().then(setMe).catch(() => {})
+    const load = () => getMe().then(setMe).catch(() => {})
+    load()
+    window.addEventListener('knowvia:account-updated', load)
+    return () => window.removeEventListener('knowvia:account-updated', load)
   }, [])
 
   const workspaceName = me?.workspace_name || 'My Workspace'

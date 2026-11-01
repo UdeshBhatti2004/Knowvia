@@ -34,6 +34,22 @@ export async function getMe() {
   return response.json()
 }
 
+export async function updateWorkspace(name) {
+  const response = await apiFetch(`${API_URL}/auth/workspace`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (response.status === 403) {
+    throw new Error('The admin account has no workspace to rename.')
+  }
+  if (response.status === 422) throw new Error('Enter a workspace name.')
+  if (!response.ok) throw new Error('Could not save. Try again.')
+  const data = await response.json()
+  window.dispatchEvent(new Event('knowvia:account-updated'))
+  return data
+}
+
 async function authRequest(path, body, errors) {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
