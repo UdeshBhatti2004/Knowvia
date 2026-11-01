@@ -63,6 +63,13 @@ def fake_storage(documents_dir, metadata=None):
             "save_sources_metadata",
             side_effect=fake_save,
         ) as save,
+        # Recovery asks Mongo which workspaces have Processing records.
+        # The fake store plays the "default" workspace.
+        patch.object(
+            source_service,
+            "workspace_ids_with_status",
+            side_effect=lambda status: ["default"],
+        ),
     ):
         yield SimpleNamespace(refresh=refresh, save=save, store=store)
 

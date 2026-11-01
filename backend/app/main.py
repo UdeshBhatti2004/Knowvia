@@ -13,32 +13,25 @@ from app.api.routes.public import router as public_router
 from app.api.routes.sources import router as sources_router
 from app.api.routes.widget import router as widget_router
 from app.core.config import CORS_ORIGINS
-from app.knowledge.retrieval import refresh_knowledge_base
-from app.knowledge.startup import stop_retrying, warm_up
-from app.knowledge.storage_sync import restore_from_db
 from app.services.source_service import recover_interrupted_uploads
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Runs once when the server starts, not when the module is imported.
-    # A failed build (for example a rate limit) no longer stops the server.
-    # Uploads made after this moment belong to live background jobs, so
-    # recovery must never touch them.
+    # Runs once when the server starts. Knowledge bases are built lazily per
+    # workspace on first use, so startup only fixes uploads that a restart
+    # left in "Processing". Uploads made after started_at belong to live
+    # background jobs, so recovery never touches them.
     started_at = datetime.now(timezone.utc)
 
-    # Pull PDFs and the embedding cache from the database before building.
-    await asyncio.to_thread(restore_from_db)
-
-    def recover():
-        changed = recover_interrupted_uploads(started_at)
+    try:
+        changed = await asyncio.to_thread(recover_interrupted_uploads, started_at)
         if changed:
             print(f"Recovered {changed} interrupted upload(s).")
+    except Exception as exc:
+        print(f"Upload recovery failed: {exc}")
 
-    # recover() runs only after a successful refresh (now or in a retry).
-    retry_task = await warm_up(refresh_knowledge_base, on_ready=recover)
     yield
-    await stop_retrying(retry_task)
 
 
 def create_app() -> FastAPI:

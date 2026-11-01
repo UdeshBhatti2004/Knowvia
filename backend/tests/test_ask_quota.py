@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 from app.services.answer_service import AnswerQuotaExceeded
 from main import app
 
@@ -35,15 +34,3 @@ def test_ask_returns_429_when_daily_answer_limit_is_reached():
     assert response.json()["detail"] == (
         "The daily answer limit has been reached. Please try again later."
     )
-
-
-def test_server_starts_even_if_the_first_knowledge_base_build_fails():
-    with (
-        patch(
-            "app.main.refresh_knowledge_base",
-            side_effect=RuntimeError("429"),
-        ),
-        patch("app.knowledge.startup.RETRY_DELAYS", ()),
-    ):
-        with TestClient(create_app()) as test_client:
-            assert test_client.get("/").status_code == 200

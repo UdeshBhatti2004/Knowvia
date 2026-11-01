@@ -14,11 +14,12 @@ from app.core.config import (
 )
 from app.knowledge.retrieval import refresh_knowledge_base
 from app.knowledge.workspace_paths import workspace_paths
-from app.repositories.blob_store import delete_blob, put_blob
+from app.repositories.blob_store import delete_blob, list_blobs, put_blob
 from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.repositories.source_repository import (
     load_sources_metadata,
     save_sources_metadata,
+    workspace_ids_with_status,
 )
 
 
@@ -116,41 +117,51 @@ def _remove_record(
 
 
 def recover_interrupted_uploads(started_at: datetime) -> int:
-    """Fix records left in "Processing" by a crash or restart (default
-    workspace, called after the startup refresh succeeds).
+    """Fix records left in "Processing" by a crash or restart, in every
+    workspace.
 
     Only records uploaded BEFORE started_at are touched. A newer
-    "Processing" record belongs to a live background job.
+    "Processing" record belongs to a live background job. A file counts as
+    present if it is on local disk or in the database copy.
     """
     changed = 0
 
     with metadata_lock:
-        metadata = load_sources_metadata()
+        for workspace_id in workspace_ids_with_status("Processing"):
+            metadata = _load(workspace_id)
+            stored = None
+            workspace_changed = False
 
-        for name, record in metadata.items():
-            if record.get("status") != "Processing":
-                continue
+            for name, record in metadata.items():
+                if record.get("status") != "Processing":
+                    continue
 
-            try:
-                uploaded_at = datetime.fromisoformat(record["uploaded_at"])
-            except (KeyError, TypeError, ValueError):
-                uploaded_at = None
-            else:
-                if uploaded_at.tzinfo is None:
-                    uploaded_at = uploaded_at.replace(tzinfo=timezone.utc)
+                try:
+                    uploaded_at = datetime.fromisoformat(record["uploaded_at"])
+                except (KeyError, TypeError, ValueError):
+                    uploaded_at = None
+                else:
+                    if uploaded_at.tzinfo is None:
+                        uploaded_at = uploaded_at.replace(tzinfo=timezone.utc)
 
-            if uploaded_at is not None and uploaded_at >= started_at:
-                continue
+                if uploaded_at is not None and uploaded_at >= started_at:
+                    continue
 
-            exists = (DOCUMENTS_DIR / name).is_file()
-            metadata[name] = {
-                **record,
-                "status": "Processed" if exists else "Failed",
-            }
-            changed += 1
+                exists = (_docs_dir(workspace_id) / name).is_file()
+                if not exists:
+                    if stored is None:
+                        stored = set(list_blobs("pdf", workspace_id))
+                    exists = name in stored
 
-        if changed:
-            save_sources_metadata(metadata)
+                metadata[name] = {
+                    **record,
+                    "status": "Processed" if exists else "Failed",
+                }
+                workspace_changed = True
+                changed += 1
+
+            if workspace_changed:
+                _save(metadata, workspace_id)
 
     return changed
 

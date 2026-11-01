@@ -44,3 +44,15 @@ def save_sources_metadata(metadata: dict, workspace_id=DEFAULT_WORKSPACE_ID) -> 
             status_code=500,
             detail="Unable to save file metadata.",
         ) from exc
+
+def workspace_ids_with_status(status: str) -> list[str]:
+    """Ids of workspaces that have at least one source record in this status."""
+    try:
+        return get_db()[COLLECTION].distinct(
+            "workspace_id", {"record.status": status}
+        )
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to read uploaded-file metadata.",
+        ) from exc
