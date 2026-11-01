@@ -197,7 +197,7 @@ function Sidebar({
                 {accountLabel}
               </p>
               <p className="text-[10px] text-zinc-500">
-                {me?.is_admin ? 'Admin' : 'Owner'}
+                {Owner}
               </p>
             </div>
 

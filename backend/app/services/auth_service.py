@@ -25,18 +25,6 @@ def _sign(body: str) -> str:
     )
 
 
-def is_configured() -> bool:
-    return bool(config.ADMIN_PASSWORD and config.AUTH_SECRET)
-
-
-def check_password(candidate: str) -> bool:
-    if not config.ADMIN_PASSWORD:
-        return False
-    return hmac.compare_digest(
-        candidate.encode("utf-8"), config.ADMIN_PASSWORD.encode("utf-8")
-    )
-
-
 def create_token(
     ttl_seconds: int | None = None,
     user_id: str | None = None,
@@ -67,7 +55,3 @@ def decode_token(token: str) -> dict | None:
         return payload
     except (ValueError, KeyError, TypeError):
         return None
-
-
-def verify_token(token: str) -> bool:
-    return decode_token(token) is not None

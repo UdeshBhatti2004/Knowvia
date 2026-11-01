@@ -24,6 +24,10 @@ def signup(email="a@example.com", password="password123", name="Acme"):
     )
 
 
+def _auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_signup_returns_token_with_claims():
     res = signup()
     assert res.status_code == 200
@@ -36,7 +40,7 @@ def test_signup_returns_token_with_claims():
 
 def test_signup_token_passes_auth():
     token = signup().json()["token"]
-    res = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    res = client.get("/auth/me", headers=_auth(token))
     assert res.status_code == 200
 
 
@@ -79,45 +83,18 @@ def test_signup_rate_limited(monkeypatch):
     assert signup(email="two@example.com").status_code == 429
 
 
-def test_admin_token_has_no_account_claims(monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
-    res = client.post("/auth/login", json={"password": "adminpass"})
-    assert res.status_code == 200
-    claims = auth_service.decode_token(res.json()["token"])
-    assert "user_id" not in claims
-
-
 def test_me_returns_account_info():
     body = signup(email="Me@Example.com", name="My Shop").json()
-    res = client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {body['token']}"}
-    )
+    res = client.get("/auth/me", headers=_auth(body["token"]))
     assert res.status_code == 200
     data = res.json()
     assert data["email"] == "me@example.com"
     assert data["workspace_id"] == body["workspace_id"]
     assert data["workspace_name"] == "My Shop"
-    assert data["is_admin"] is False
-
-
-def test_me_admin_token(monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
-    token = client.post("/auth/login", json={"password": "adminpass"}).json()["token"]
-    res = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["email"] is None
-    assert data["workspace_id"] == "default"
-    assert data["workspace_name"] == "Admin"
-    assert data["is_admin"] is True
 
 
 def test_me_requires_token():
     assert client.get("/auth/me").status_code == 401
-
-
-def _auth(token):
-    return {"Authorization": f"Bearer {token}"}
 
 
 def test_rename_workspace():
@@ -141,13 +118,6 @@ def test_rename_workspace_validation():
         client.put("/auth/workspace", json={"name": "   "}, headers=_auth(token)).status_code
         == 422
     )
-
-
-def test_rename_workspace_admin_forbidden(monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
-    token = client.post("/auth/login", json={"password": "adminpass"}).json()["token"]
-    res = client.put("/auth/workspace", json={"name": "X"}, headers=_auth(token))
-    assert res.status_code == 403
 
 
 def test_rename_workspace_requires_token():

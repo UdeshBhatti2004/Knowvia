@@ -2,27 +2,35 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+
 from app.api.routes import auth as auth_route
-from app.services.rate_limiter import RateLimiter
 from app.core import config
 from app.main import app
 from app.services import auth_service
+from app.services.rate_limiter import RateLimiter
 
 client = TestClient(app)
+
+CREDS = {"email": "t@example.com", "password": "password123"}
 
 
 @pytest.fixture(autouse=True)
 def configured():
     with (
-        patch.object(config, "ADMIN_PASSWORD", "correct-horse"),
         patch.object(config, "AUTH_SECRET", "test-secret"),
         patch.object(auth_route, "limiter", RateLimiter([(60, 1000)])),
+        patch.object(auth_route, "signup_limiter", RateLimiter([(60, 1000)])),
     ):
         yield
 
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def make_token():
+    res = client.post("/auth/signup", json={**CREDS, "workspace_name": "T"})
+    return res.json()["token"]
 
 
 @pytest.mark.parametrize(
@@ -46,56 +54,83 @@ def test_domains_read_stays_open():
 
 
 def test_login_wrong_password():
-    response = client.post("/auth/login", json={"password": "nope"})
+    make_token()
+    response = client.post(
+        "/auth/login", json={"email": CREDS["email"], "password": "nope-nope"}
+    )
     assert response.status_code == 401
 
 
 def test_login_success_and_token_works():
-    response = client.post("/auth/login", json={"password": "correct-horse"})
+    make_token()
+    response = client.post("/auth/login", json=CREDS)
     assert response.status_code == 200
     token = response.json()["token"]
     assert client.get("/auth/me", headers=bearer(token)).status_code == 200
 
 
+def test_login_requires_email():
+    response = client.post("/auth/login", json={"password": "whatever"})
+    assert response.status_code == 422
+
+
 def test_expired_token_rejected():
-    token = auth_service.create_token(ttl_seconds=-1)
+    token = auth_service.create_token(
+        ttl_seconds=-1, user_id="u", workspace_id="w"
+    )
     assert client.get("/auth/me", headers=bearer(token)).status_code == 401
 
 
 def test_tampered_token_rejected():
-    token = auth_service.create_token()
+    token = make_token()
     body, sig = token.split(".")
-    forged = auth_service._b64(b'{"exp": 9999999999}') + "." + sig
-    assert client.get("/auth/me", headers=bearer(forged)).status_code == 401
+    forged_body = auth_service._b64(
+        b'{"exp": 9999999999, "user_id": "u", "workspace_id": "w"}'
+    )
+    assert (
+        client.get("/auth/me", headers=bearer(forged_body + "." + sig)).status_code
+        == 401
+    )
     assert client.get("/auth/me", headers=bearer(body + ".x")).status_code == 401
 
 
 def test_token_from_other_secret_rejected():
-    token = auth_service.create_token()
+    token = make_token()
     with patch.object(config, "AUTH_SECRET", "different-secret"):
         assert client.get("/auth/me", headers=bearer(token)).status_code == 401
 
 
 def test_wrong_scheme_rejected():
-    token = auth_service.create_token()
+    token = make_token()
     response = client.get("/auth/me", headers={"Authorization": f"Basic {token}"})
     assert response.status_code == 401
 
 
+def test_token_without_account_claims_rejected():
+    token = auth_service.create_token()
+    assert client.get("/auth/me", headers=bearer(token)).status_code == 401
+    assert client.get("/sources", headers=bearer(token)).status_code == 401
+
+
 def test_login_not_configured():
-    with patch.object(config, "ADMIN_PASSWORD", None):
-        response = client.post("/auth/login", json={"password": "x"})
+    with patch.object(config, "AUTH_SECRET", None):
+        response = client.post("/auth/login", json=CREDS)
     assert response.status_code == 503
 
+
 def test_login_rate_limited():
+    make_token()
     with patch.object(auth_route, "limiter", RateLimiter([(60, 3)])):
         for _ in range(3):
             assert (
-                client.post("/auth/login", json={"password": "nope"}).status_code
+                client.post(
+                    "/auth/login",
+                    json={"email": CREDS["email"], "password": "nope-nope"},
+                ).status_code
                 == 401
             )
 
-        blocked = client.post("/auth/login", json={"password": "correct-horse"})
+        blocked = client.post("/auth/login", json=CREDS)
 
     assert blocked.status_code == 429
     assert int(blocked.headers["Retry-After"]) >= 1

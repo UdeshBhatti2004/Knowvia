@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.auth import require_admin
+from app.api.auth import require_user
 from app.api.routes.ask import router as ask_router
 from app.api.routes.assistant import router as assistant_router
 from app.api.routes.auth import router as auth_router
@@ -19,7 +19,6 @@ from app.knowledge.storage_sync import restore_from_db
 from app.services.source_service import recover_interrupted_uploads
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs once when the server starts, not when the module is imported.
@@ -28,7 +27,7 @@ async def lifespan(app: FastAPI):
     # recovery must never touch them.
     started_at = datetime.now(timezone.utc)
 
-        # Pull PDFs and the embedding cache from the database before building.
+    # Pull PDFs and the embedding cache from the database before building.
     await asyncio.to_thread(restore_from_db)
 
     def recover():
@@ -61,12 +60,12 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
-    admin = [Depends(require_admin)]
+    authed = [Depends(require_user)]
 
-    # Dashboard API: admin token required.
-    app.include_router(ask_router, dependencies=admin)
-    app.include_router(sources_router, dependencies=admin)
-    app.include_router(assistant_router, dependencies=admin)
+    # Dashboard API: account token required.
+    app.include_router(ask_router, dependencies=authed)
+    app.include_router(sources_router, dependencies=authed)
+    app.include_router(assistant_router, dependencies=authed)
 
     # Open or self-protected: login, public widget (widget key), widget routes
     # (per-route protection inside widget.py).
@@ -75,9 +74,6 @@ def create_app() -> FastAPI:
     app.include_router(widget_router)
 
     return app
-
-
-
 
 
 app = create_app()

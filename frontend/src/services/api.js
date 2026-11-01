@@ -40,9 +40,6 @@ export async function updateWorkspace(name) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   })
-  if (response.status === 403) {
-    throw new Error('The admin account has no workspace to rename.')
-  }
   if (response.status === 422) throw new Error('Enter a workspace name.')
   if (!response.ok) throw new Error('Could not save. Try again.')
   const data = await response.json()
@@ -69,13 +66,15 @@ async function authRequest(path, body, errors) {
   return data
 }
 
-// With an email: account login. Without: legacy admin-password login.
-export function login(password, email) {
-  const body = email ? { email, password } : { password }
-  return authRequest('/auth/login', body, {
-    401: email ? 'Wrong email or password.' : 'Wrong password.',
-    422: 'Enter a valid email and password.',
-  })
+export function login(email, password) {
+  return authRequest(
+    '/auth/login',
+    { email, password },
+    {
+      401: 'Wrong email or password.',
+      422: 'Enter a valid email and password.',
+    },
+  )
 }
 
 export function signup(email, password, workspaceName) {

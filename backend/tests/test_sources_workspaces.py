@@ -97,20 +97,6 @@ def test_blob_is_stored_under_the_workspace():
     assert blob_store.get_blob("pdf", "a.pdf") is None
 
 
-def test_admin_token_uses_default_workspace(monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
-    res = client.post("/auth/login", json={"password": "adminpass"})
-    admin = {"Authorization": f"Bearer {res.json()['token']}"}
-
-    a, _ = make_user("a@example.com")
-    upload(a, "a.pdf", b"aaa")
-
-    assert names(admin) == []
-    assert upload(admin, "d.pdf", b"ddd").status_code == 200
-    assert names(admin) == ["d.pdf"]
-    assert names(a) == ["a.pdf"]
-
-
 def test_ensure_loaded_runs_restore_then_refresh_once(monkeypatch):
     calls = []
     monkeypatch.setattr(retrieval, "is_loaded", lambda w="default": bool(calls) and len(calls) >= 2)

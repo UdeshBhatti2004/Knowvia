@@ -87,13 +87,3 @@ def test_ask_uses_the_workspaces_fallback(monkeypatch):
     assert ans_b != ans_a
 
 
-def test_admin_token_still_uses_default_workspace(monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
-    res = client.post("/auth/login", json={"password": "adminpass"})
-    admin = {"Authorization": f"Bearer {res.json()['token']}"}
-
-    a, _ = make_user("a@example.com")
-    client.put("/assistant", headers=a, json=settings("Alpha"))
-
-    assert client.get("/assistant", headers=admin).json()["name"] == "Business Assistant"
-    assert client.get("/widget", headers=admin).json()["public_key"].startswith("wk_")

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.api.auth import require_claims
+from app.api.auth import require_account
 from app.api.client_ip import get_client_ip
 from app.core import config
 from app.core.passwords import hash_password, verify_password
@@ -21,7 +21,7 @@ _DUMMY_HASH = hash_password("not-a-real-password")
 
 
 class LoginRequest(BaseModel):
-    email: str | None = Field(default=None, max_length=254)
+    email: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=200)
 
 
@@ -45,6 +45,17 @@ def _throttle(rate_limiter: RateLimiter, request: Request) -> None:
         )
 
 
+def _session(user: dict, workspace: dict) -> dict:
+    return {
+        "token": auth_service.create_token(
+            user_id=user["_id"], workspace_id=workspace["_id"]
+        ),
+        "expires_in": config.AUTH_TOKEN_TTL_SECONDS,
+        "email": user["email"],
+        "workspace_id": workspace["_id"],
+    }
+
+
 @router.post("/signup")
 def signup_route(payload: SignupRequest, request: Request):
     _throttle(signup_limiter, request)
@@ -63,14 +74,7 @@ def signup_route(payload: SignupRequest, request: Request):
         user["_id"], payload.workspace_name
     )
 
-    return {
-        "token": auth_service.create_token(
-            user_id=user["_id"], workspace_id=workspace["_id"]
-        ),
-        "expires_in": config.AUTH_TOKEN_TTL_SECONDS,
-        "email": user["email"],
-        "workspace_id": workspace["_id"],
-    }
+    return _session(user, workspace)
 
 
 @router.post("/login")
@@ -78,29 +82,12 @@ def login_route(payload: LoginRequest, request: Request):
     # Checked first, so guessing is throttled whatever the answer would be.
     _throttle(limiter, request)
 
-    if payload.email:
-        return _user_login(payload.email, payload.password)
-
-    # No email: legacy single-admin login.
-    if not auth_service.is_configured():
-        raise HTTPException(status_code=503, detail="Login is not configured.")
-
-    if not auth_service.check_password(payload.password):
-        raise HTTPException(status_code=401, detail="Wrong password.")
-
-    return {
-        "token": auth_service.create_token(),
-        "expires_in": config.AUTH_TOKEN_TTL_SECONDS,
-    }
-
-
-def _user_login(email: str, password: str):
     if not config.AUTH_SECRET:
         raise HTTPException(status_code=503, detail="Login is not configured.")
 
-    user = user_repository.get_by_email(email)
+    user = user_repository.get_by_email(payload.email)
     stored = user["password_hash"] if user else _DUMMY_HASH
-    ok = verify_password(password, stored)
+    ok = verify_password(payload.password, stored)
 
     if not user or not ok:
         raise HTTPException(status_code=401, detail="Wrong email or password.")
@@ -109,31 +96,13 @@ def _user_login(email: str, password: str):
     if not workspace:
         raise HTTPException(status_code=500, detail="Workspace missing.")
 
-    return {
-        "token": auth_service.create_token(
-            user_id=user["_id"], workspace_id=workspace["_id"]
-        ),
-        "expires_in": config.AUTH_TOKEN_TTL_SECONDS,
-        "email": user["email"],
-        "workspace_id": workspace["_id"],
-    }
+    return _session(user, workspace)
 
 
 @router.get("/me")
-def me_route(claims: dict = Depends(require_claims)):
-    user_id = claims.get("user_id")
-
-    if not user_id:
-        return {
-            "ok": True,
-            "email": None,
-            "workspace_id": "default",
-            "workspace_name": "Admin",
-            "is_admin": True,
-        }
-
-    user = user_repository.get_by_id(user_id)
-    workspace = workspace_repository.get_by_id(claims.get("workspace_id") or "")
+def me_route(claims: dict = Depends(require_account)):
+    user = user_repository.get_by_id(claims["user_id"])
+    workspace = workspace_repository.get_by_id(claims["workspace_id"])
 
     if not user or not workspace:
         raise HTTPException(status_code=401, detail="Not authenticated.")
@@ -143,26 +112,18 @@ def me_route(claims: dict = Depends(require_claims)):
         "email": user["email"],
         "workspace_id": workspace["_id"],
         "workspace_name": workspace["name"],
-        "is_admin": False,
     }
 
 
 @router.put("/workspace")
 def update_workspace_route(
-    payload: WorkspaceUpdate, claims: dict = Depends(require_claims)
+    payload: WorkspaceUpdate, claims: dict = Depends(require_account)
 ):
-    workspace_id = claims.get("workspace_id")
-
-    if not claims.get("user_id") or not workspace_id:
-        raise HTTPException(
-            status_code=403, detail="Admin has no workspace to rename."
-        )
-
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="Name can't be empty.")
 
-    workspace = workspace_repository.rename_workspace(workspace_id, name)
+    workspace = workspace_repository.rename_workspace(claims["workspace_id"], name)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found.")
 

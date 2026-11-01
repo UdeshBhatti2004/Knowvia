@@ -40,8 +40,7 @@ MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
 
 
-# Admin auth (single admin for now). Both must be set in .env to enable login.
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+# Login tokens are signed with AUTH_SECRET (without it, login and signup return 503).
 AUTH_SECRET = os.getenv("AUTH_SECRET")
 AUTH_TOKEN_TTL_SECONDS = 12 * 60 * 60
 

@@ -1,6 +1,6 @@
 import pytest
 
-from app.api.auth import require_admin, require_user
+from app.api.auth import require_user
 from app.main import app
 
 # Modules that test real tokens and must not have auth bypassed.
@@ -14,15 +14,13 @@ REAL_AUTH_MODULES = (
 
 
 @pytest.fixture(autouse=True)
-def bypass_admin_auth(request):
+def bypass_auth(request):
     if request.module.__name__.endswith(REAL_AUTH_MODULES):
         yield
         return
 
-    app.dependency_overrides[require_admin] = lambda: None
     app.dependency_overrides[require_user] = lambda: "default"
     yield
-    app.dependency_overrides.pop(require_admin, None)
     app.dependency_overrides.pop(require_user, None)
 
 

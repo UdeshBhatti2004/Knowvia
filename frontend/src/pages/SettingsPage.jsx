@@ -50,7 +50,6 @@ function SettingsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const isAdmin = Boolean(me?.is_admin)
   const unchanged = name.trim() === (me?.workspace_name || '')
 
   const handleReset = () => {
@@ -60,7 +59,7 @@ function SettingsPage() {
 
   const handleSave = async (e) => {
     e.preventDefault()
-    if (isAdmin || unchanged || !name.trim()) return
+    if (unchanged || !name.trim()) return
 
     setSaving(true)
     setStatus(null)
@@ -94,10 +93,7 @@ function SettingsPage() {
             title="Workspace"
             description="How your business appears in Knowvia."
           >
-            <Field
-              label="Workspace name"
-              hint={isAdmin ? 'The admin account has no workspace to rename.' : undefined}
-            >
+            <Field label="Workspace name">
               <input
                 type="text"
                 value={name}
@@ -106,7 +102,7 @@ function SettingsPage() {
                   setStatus(null)
                 }}
                 maxLength={100}
-                disabled={loading || isAdmin}
+                disabled={loading}
                 placeholder="e.g. Sunrise Tuition Classes"
                 className={inputClass}
               />
@@ -124,7 +120,6 @@ function SettingsPage() {
                 value={me?.email || ''}
                 readOnly
                 disabled
-                placeholder={isAdmin ? 'Admin login (no email)' : ''}
                 className={inputClass}
               />
             </Field>
@@ -134,7 +129,7 @@ function SettingsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
-            disabled={saving || loading || isAdmin || unchanged || !name.trim()}
+            disabled={saving || loading || unchanged || !name.trim()}
             className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
@@ -143,7 +138,7 @@ function SettingsPage() {
           <button
             type="button"
             onClick={handleReset}
-            disabled={saving || loading || isAdmin || unchanged}
+            disabled={saving || loading || unchanged}
             className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCcw className="h-4 w-4" />
