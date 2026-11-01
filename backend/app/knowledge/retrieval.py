@@ -17,6 +17,7 @@ from app.core.ai_client import client
 from app.core.config import (
     CACHE_FILE,
     DOCUMENTS_DIR,
+    MAX_LOADED_WORKSPACES,
 )
 from app.knowledge.pdf_reader import extract_text_from_pdf
 from app.knowledge.chunking import chunk_pages
@@ -50,6 +51,7 @@ refresh_lock = threading.Lock()
 
 # Other workspaces: id -> state and id -> lock. "default" keeps using the
 # module-level knowledge_base_state and refresh_lock above.
+# _states is ordered from least to most recently used (dict insertion order).
 _states: dict[str, KnowledgeBaseState] = {}
 _locks: dict[str, threading.Lock] = {}
 _registry_lock = threading.Lock()
@@ -62,10 +64,31 @@ def _lock_for(workspace_id):
         return _locks.setdefault(workspace_id, threading.Lock())
 
 
+def _store_state(workspace_id, state):
+    """Save a workspace's state and drop the least recently used ones
+    beyond MAX_LOADED_WORKSPACES. An evicted workspace is rebuilt from the
+    database on its next request."""
+    with _registry_lock:
+        _states.pop(workspace_id, None)
+        _states[workspace_id] = state
+
+        while len(_states) > MAX_LOADED_WORKSPACES:
+            oldest = next(iter(_states))
+            del _states[oldest]
+            print(f"Evicted knowledge base from memory [{oldest}].")
+
+
 def get_state(workspace_id=DEFAULT_WORKSPACE_ID):
     if workspace_id == DEFAULT_WORKSPACE_ID:
         return knowledge_base_state
-    return _states.get(workspace_id)
+
+    with _registry_lock:
+        state = _states.get(workspace_id)
+        if state is not None:
+            # Mark as most recently used.
+            del _states[workspace_id]
+            _states[workspace_id] = state
+        return state
 
 
 def is_loaded(workspace_id=DEFAULT_WORKSPACE_ID):
@@ -172,7 +195,7 @@ def refresh_knowledge_base(workspace_id=DEFAULT_WORKSPACE_ID):
         if workspace_id == DEFAULT_WORKSPACE_ID:
             knowledge_base_state = refreshed_state
         else:
-            _states[workspace_id] = refreshed_state
+            _store_state(workspace_id, refreshed_state)
 
         print(
             f"Knowledge base refreshed [{workspace_id}]: "

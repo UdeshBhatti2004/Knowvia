@@ -68,3 +68,9 @@ CORS_ORIGINS = parse_origins(os.getenv("CORS_ORIGINS") or DEFAULT_CORS_ORIGINS)
 # MongoDB (Atlas). Both are read from .env / host env vars.
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_DB = os.getenv("MONGODB_DB") or "knowvia"
+
+
+
+# How many workspaces keep their embeddings in memory at once. The least
+# recently used one is dropped and reloaded from the database on next use.
+MAX_LOADED_WORKSPACES = max(1, int(os.getenv("MAX_LOADED_WORKSPACES", "5")))
