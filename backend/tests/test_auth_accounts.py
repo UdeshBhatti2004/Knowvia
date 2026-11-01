@@ -85,3 +85,32 @@ def test_admin_token_has_no_account_claims(monkeypatch):
     assert res.status_code == 200
     claims = auth_service.decode_token(res.json()["token"])
     assert "user_id" not in claims
+
+
+def test_me_returns_account_info():
+    body = signup(email="Me@Example.com", name="My Shop").json()
+    res = client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {body['token']}"}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["email"] == "me@example.com"
+    assert data["workspace_id"] == body["workspace_id"]
+    assert data["workspace_name"] == "My Shop"
+    assert data["is_admin"] is False
+
+
+def test_me_admin_token(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "adminpass")
+    token = client.post("/auth/login", json={"password": "adminpass"}).json()["token"]
+    res = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["email"] is None
+    assert data["workspace_id"] == "default"
+    assert data["workspace_name"] == "Admin"
+    assert data["is_admin"] is True
+
+
+def test_me_requires_token():
+    assert client.get("/auth/me").status_code == 401
