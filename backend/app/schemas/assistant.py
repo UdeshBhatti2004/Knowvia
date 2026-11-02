@@ -1,7 +1,10 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DEFAULT_ASSISTANT_NAME = "Business Assistant"
-DEFAULT_WELCOME_MESSAGE = "Hi! Ask me anything about our business."
+DEFAULT_WELCOME_MESSAGE = (
+    "Hi! I'm this business's assistant. "
+    "Ask me about our fees, timings, policies and services."
+)
 DEFAULT_FALLBACK_MESSAGE = (
     "Sorry, I couldn't find relevant information "
     "in the available documents."
