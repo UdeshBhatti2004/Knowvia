@@ -21,7 +21,8 @@ const POLL_INTERVAL_MS = 3000
 // Anything different from these counts as "configured".
 const BACKEND_DEFAULTS = {
   name: 'Business Assistant',
-  welcome_message: 'Hi! Ask me anything about our business.',
+  welcome_message:
+    "Hi! I'm this business's assistant. Ask me about our fees, timings, policies and services.",
   fallback_message:
     "Sorry, I couldn't find relevant information in the available documents.",
 }
