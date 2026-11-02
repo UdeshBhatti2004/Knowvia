@@ -17,8 +17,6 @@ import { API_URL, apiFetch } from '../services/api'
 const POLL_INTERVAL_MS = 3000
 
 
-  const [testedAt, setTestedAt] = useState(null)
-
 // Must match the defaults in backend/app/schemas/assistant.py.
 // Anything different from these counts as "configured".
 const BACKEND_DEFAULTS = {
@@ -95,6 +93,7 @@ function OverviewPage({ onNavigate, onAskSample }) {
   const [error, setError] = useState('')
   const [assistantConfigured, setAssistantConfigured] = useState(false)
   const [assistantChecked, setAssistantChecked] = useState(false)
+  const [testedAt, setTestedAt] = useState(null)
 
   // showSpinner = true: first load or Retry (shows loading and errors).
   // showSpinner = false: the automatic check while a file is processing.
@@ -189,7 +188,6 @@ function OverviewPage({ onNavigate, onAskSample }) {
 
   const tested = Boolean(testedAt)
   const lastTest = testedAt ? timeAgo(testedAt) : null
-
   const hasDocuments = sources.length > 0
   // Failed uploads do not count as "documents added".
   const hasUsableDocuments = processedCount + processingCount > 0
