@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import { Send, Loader2, AlertCircle } from 'lucide-react'
+import { Bot, Send, Loader2, AlertCircle, User } from 'lucide-react'
 import { motion } from 'motion/react'
 import { API_URL } from '../services/api'
 
@@ -8,6 +8,22 @@ const WIDGET_KEY = params.get('key') || ''
 
 function authHeaders() {
   return { 'X-Widget-Key': WIDGET_KEY }
+}
+
+function BotAvatar() {
+  return (
+    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-200">
+      <Bot size={14} />
+    </div>
+  )
+}
+
+function UserAvatar() {
+  return (
+    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400">
+      <User size={14} />
+    </div>
+  )
 }
 
 export default function PublicChatPage() {
@@ -94,9 +110,9 @@ export default function PublicChatPage() {
 
   if (setupError) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center bg-white p-6">
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <AlertCircle className="h-4 w-4 text-red-500" />
+      <div className="flex h-dvh w-full items-center justify-center bg-[#0c0c0f] p-6">
+        <div className="flex items-center gap-2 text-sm text-zinc-400">
+          <AlertCircle className="size-4 text-red-400" />
           {setupError}
         </div>
       </div>
@@ -105,59 +121,106 @@ export default function PublicChatPage() {
 
   if (!assistant) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center bg-white">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      <div className="flex h-dvh w-full items-center justify-center bg-[#0c0c0f]">
+        <Loader2 className="size-5 animate-spin text-zinc-500" />
       </div>
     )
   }
 
   return (
-    <div className="flex h-dvh w-full flex-col bg-white">
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-slate-900 px-4 py-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
-          {assistant.name.charAt(0).toUpperCase()}
+    <div className="flex h-dvh w-full flex-col bg-[#0c0c0f] text-white">
+      <header className="flex shrink-0 items-center gap-3 border-b border-white/[0.08] bg-[#111114] px-4 py-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-violet-600">
+          <Bot size={18} />
         </div>
-        <div className="text-sm font-semibold text-white">{assistant.name}</div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-zinc-100">
+            {assistant.name}
+          </p>
+          <p className="text-[11px] text-zinc-500">Business assistant</p>
+        </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-slate-50 p-4">
-        <div className="w-3/4 self-start rounded-2xl rounded-tl-sm bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm">
-          {assistant.welcome_message}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <div className="flex w-11/12 items-start gap-2.5 self-start sm:w-3/4">
+          <BotAvatar />
+          <p className="min-w-0 break-words rounded-2xl rounded-tl-sm bg-white/[0.05] px-3.5 py-2.5 text-sm leading-6 text-zinc-200">
+            {assistant.welcome_message}
+          </p>
         </div>
 
-        {messages.map((m, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.15 }}
-            className={
-              m.role === 'user'
-                ? 'w-3/4 self-end rounded-2xl rounded-tr-sm bg-slate-900 px-4 py-2.5 text-sm text-white'
-                : m.role === 'error'
-                  ? 'w-3/4 self-start rounded-2xl rounded-tl-sm bg-red-50 px-4 py-2.5 text-sm text-red-700'
-                  : 'w-3/4 self-start rounded-2xl rounded-tl-sm bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm'
-            }
-          >
-            <div className="whitespace-pre-wrap">{m.text}</div>
-            {m.sources && m.sources.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
-                {m.sources.map((s, j) => (
-                  <span
-                    key={j}
-                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-                  >
-                    {s.source} · p.{s.page}
-                  </span>
-                ))}
+        {messages.map((m, i) => {
+          if (m.role === 'user') {
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex w-11/12 items-start justify-end gap-2.5 self-end sm:w-3/4"
+              >
+                <p className="min-w-0 whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-violet-600 px-3.5 py-2.5 text-sm leading-6 text-white">
+                  {m.text}
+                </p>
+                <UserAvatar />
+              </motion.div>
+            )
+          }
+
+          if (m.role === 'error') {
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex w-11/12 items-start gap-2.5 self-start sm:w-3/4"
+              >
+                <BotAvatar />
+                <p className="min-w-0 break-words rounded-2xl rounded-tl-sm border border-red-400/20 bg-red-400/10 px-3.5 py-2.5 text-sm leading-6 text-red-300">
+                  {m.text}
+                </p>
+              </motion.div>
+            )
+          }
+
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex w-11/12 items-start gap-2.5 self-start sm:w-3/4"
+            >
+              <BotAvatar />
+              <div className="min-w-0">
+                <p className="whitespace-pre-wrap break-words rounded-2xl rounded-tl-sm bg-white/[0.05] px-3.5 py-2.5 text-sm leading-6 text-zinc-200">
+                  {m.text}
+                </p>
+                {m.sources && m.sources.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 px-1">
+                    {m.sources.map((s, j) => (
+                      <span
+                        key={j}
+                        className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-400"
+                      >
+                        {s.source}
+                        {s.page ? ` · p.${s.page}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </motion.div>
-        ))}
+            </motion.div>
+          )
+        })}
 
         {sending && (
-          <div className="self-start rounded-2xl rounded-tl-sm bg-white px-4 py-2.5 shadow-sm">
-            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+          <div className="flex items-start gap-2.5 self-start">
+            <BotAvatar />
+            <div className="rounded-2xl rounded-tl-sm bg-white/[0.05] px-3.5 py-2.5">
+              <Loader2 className="size-4 animate-spin text-zinc-400" />
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -165,21 +228,22 @@ export default function PublicChatPage() {
 
       <form
         onSubmit={handleSend}
-        className="flex items-center gap-2 border-t border-slate-200 bg-white p-3"
+        className="flex shrink-0 items-center gap-2 border-t border-white/[0.08] bg-[#111114] p-3"
       >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={500}
           placeholder="Ask a question..."
-          className="flex-1 rounded-full border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-900"
+          className="w-full flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-400/50"
         />
         <button
           type="submit"
           disabled={sending || !input.trim()}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-40"
+          aria-label="Send"
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-violet-600"
         >
-          <Send className="h-4 w-4" />
+          <Send size={16} />
         </button>
       </form>
     </div>
