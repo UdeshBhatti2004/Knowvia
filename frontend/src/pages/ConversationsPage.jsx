@@ -300,4 +300,4 @@ function ConversationsPage({ onNavigate }) {
   )
 }
 
-export default ConversationsPagey
+export default ConversationsPage
