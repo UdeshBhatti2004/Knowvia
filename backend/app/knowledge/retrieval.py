@@ -13,7 +13,6 @@ import numpy as np
 from google.genai import errors
 
 from app.core.ai_client import client
-from app.core.ai_client import client
 from app.core.config import (
     CACHE_FILE,
     DOCUMENTS_DIR,
@@ -40,17 +39,7 @@ class KnowledgeBaseState:
     pdf_modified_time: Mapping[str, float]
 
 
-knowledge_base_state = KnowledgeBaseState(
-    knowledge_base=(),
-    document_embeddings=(),
-    pdf_hashes=MappingProxyType({}),
-    pdf_modified_time=MappingProxyType({}),
-)
-
-refresh_lock = threading.Lock()
-
-# Other workspaces: id -> state and id -> lock. "default" keeps using the
-# module-level knowledge_base_state and refresh_lock above.
+# id -> state and id -> lock, for every workspace.
 # _states is ordered from least to most recently used (dict insertion order).
 _states: dict[str, KnowledgeBaseState] = {}
 _locks: dict[str, threading.Lock] = {}
@@ -58,8 +47,6 @@ _registry_lock = threading.Lock()
 
 
 def _lock_for(workspace_id):
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        return refresh_lock
     with _registry_lock:
         return _locks.setdefault(workspace_id, threading.Lock())
 
@@ -79,9 +66,6 @@ def _store_state(workspace_id, state):
 
 
 def get_state(workspace_id=DEFAULT_WORKSPACE_ID):
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        return knowledge_base_state
-
     with _registry_lock:
         state = _states.get(workspace_id)
         if state is not None:
@@ -93,6 +77,7 @@ def get_state(workspace_id=DEFAULT_WORKSPACE_ID):
 
 def is_loaded(workspace_id=DEFAULT_WORKSPACE_ID):
     return get_state(workspace_id) is not None
+
 
 def get_embedding(text):
     max_attempts = 3
@@ -121,8 +106,6 @@ def get_embedding(text):
 
 
 def refresh_knowledge_base(workspace_id=DEFAULT_WORKSPACE_ID):
-    global knowledge_base_state
-
     docs_dir, cache_file = workspace_paths(
         workspace_id, DOCUMENTS_DIR, CACHE_FILE
     )
@@ -192,10 +175,7 @@ def refresh_knowledge_base(workspace_id=DEFAULT_WORKSPACE_ID):
             pdf_modified_time=MappingProxyType(current_modified_times),
         )
 
-        if workspace_id == DEFAULT_WORKSPACE_ID:
-            knowledge_base_state = refreshed_state
-        else:
-            _store_state(workspace_id, refreshed_state)
+        _store_state(workspace_id, refreshed_state)
 
         print(
             f"Knowledge base refreshed [{workspace_id}]: "

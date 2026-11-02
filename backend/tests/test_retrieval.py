@@ -4,6 +4,8 @@ import pytest
 
 from app.knowledge import retrieval
 
+WS = "ws-test"
+
 # Tiny fake "embedding space": one axis per topic.
 REFUND = (1.0, 0.0, 0.0)
 PYTHON = (0.0, 1.0, 0.0)
@@ -39,7 +41,7 @@ def fake_knowledge_base(monkeypatch):
         pdf_hashes=MappingProxyType({}),
         pdf_modified_time=MappingProxyType({}),
     )
-    monkeypatch.setattr(retrieval, "knowledge_base_state", state)
+    monkeypatch.setitem(retrieval._states, WS, state)
     monkeypatch.setattr(retrieval, "get_embedding", fake_embedding)
     # No Gemini call: split questions with a simple fake.
     monkeypatch.setattr(
@@ -55,7 +57,7 @@ def fake_knowledge_base(monkeypatch):
 
 def test_retrieve_refund_policy():
     documents, highest_score = retrieval.retrieve_document(
-        "Can I get a refund within 5 days"
+        "Can I get a refund within 5 days", WS
     )
 
     assert documents is not None
@@ -66,7 +68,7 @@ def test_retrieve_refund_policy():
 
 def test_unrelated_question():
     documents, highest_score = retrieval.retrieve_document(
-        "What is the capital of France"
+        "What is the capital of France", WS
     )
 
     assert documents is None
@@ -75,7 +77,7 @@ def test_unrelated_question():
 
 def test_multi_part_question():
     documents, highest_score = retrieval.retrieve_document(
-        "What is the Python course duration and refund policy?"
+        "What is the Python course duration and refund policy?", WS
     )
 
     assert documents is not None
@@ -85,7 +87,6 @@ def test_multi_part_question():
 
     assert "3 months" in combined_text
     assert "7 days" in combined_text
-
 
 
 def test_duplicate_documents_are_removed(monkeypatch):
@@ -100,13 +101,12 @@ def test_duplicate_documents_are_removed(monkeypatch):
     )
 
     documents, highest_score = retrieval.retrieve_document(
-        "What is the refund deadline and can I request a refund?"
+        "What is the refund deadline and can I request a refund?", WS
     )
 
     assert documents is not None
     assert len(documents) == 1
     assert documents[0][0]["source"] == "business_info.pdf"
-
 
 
 def test_empty_knowledge_base_returns_nothing(monkeypatch):
@@ -116,6 +116,10 @@ def test_empty_knowledge_base_returns_nothing(monkeypatch):
         pdf_hashes=MappingProxyType({}),
         pdf_modified_time=MappingProxyType({}),
     )
-    monkeypatch.setattr(retrieval, "knowledge_base_state", empty)
+    monkeypatch.setitem(retrieval._states, WS, empty)
 
-    assert retrieval.retrieve_document("anything") == (None, 0.0)
+    assert retrieval.retrieve_document("anything", WS) == (None, 0.0)
+
+
+def test_unloaded_workspace_returns_nothing():
+    assert retrieval.retrieve_document("refund", "never-loaded") == (None, 0.0)

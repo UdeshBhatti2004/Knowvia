@@ -35,11 +35,14 @@ def test_using_a_workspace_keeps_it_loaded(monkeypatch):
     assert not retrieval.is_loaded("b")
 
 
-def test_default_workspace_is_never_evicted(monkeypatch):
+def test_restoring_a_workspace_does_not_evict_others(monkeypatch):
     monkeypatch.setattr(retrieval, "_states", {})
-    monkeypatch.setattr(retrieval, "MAX_LOADED_WORKSPACES", 1)
+    monkeypatch.setattr(retrieval, "MAX_LOADED_WORKSPACES", 2)
 
     retrieval._store_state("a", empty_state())
     retrieval._store_state("b", empty_state())
+    retrieval._store_state("b", empty_state())  # refresh of an existing one
 
-    assert retrieval.is_loaded("default")
+    assert len(retrieval._states) == 2
+    assert retrieval.is_loaded("a")
+    assert retrieval.is_loaded("b")
