@@ -5,6 +5,7 @@ import KnowledgeSourcesPage from './pages/KnowledgeSourcesPage'
 import UploadedDocumentsPage from './pages/UploadedDocumentsPage'
 import AssistantSetupPage from './pages/AssistantSetupPage'
 import InstallPage from './pages/InstallPage'
+import ConversationsPage from './pages/ConversationsPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -19,6 +20,7 @@ function App() {
       'Knowledge Sources',
       'Uploaded Documents',
       'Test Assistant',
+      'Conversations',      
       'Assistant Setup',
       'Install',
       'Settings',
@@ -52,6 +54,9 @@ function App() {
 
       case 'Assistant Setup':
         return <AssistantSetupPage />
+
+      case 'Conversations':
+        return <ConversationsPage onNavigate={handleNavigate} />
 
       case 'Install':
         return <InstallPage />

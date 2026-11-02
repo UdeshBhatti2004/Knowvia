@@ -21,6 +21,7 @@ const navigationItems = [
   { label: 'Knowledge Sources', icon: Files },
   { label: 'Uploaded Documents', icon: FileText },
   { label: 'Test Assistant', icon: MessageSquare },
+  { label: 'Conversations', icon: MessagesSquare },
   { label: 'Assistant Setup', icon: SlidersHorizontal },
   { label: 'Install', icon: Code },
 ]
