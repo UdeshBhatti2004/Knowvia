@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 import numpy as np
-from google.genai import errors
+from google.genai import errors, types
 
 from app.core.ai_client import client
 from app.core.config import (
@@ -247,16 +247,42 @@ def cosine_similarity(vector_a, vector_b):
     return float(np.dot(a, b) / denominator)
 
 
-def retrieve_document(question, workspace_id=DEFAULT_WORKSPACE_ID):
-    state = get_state(workspace_id)
+def _fix_typos(question):
+    """Ask Gemini to correct spelling. Returns the original on any failure."""
+    prompt = f"""
+    Fix spelling mistakes and typos in this customer question.
 
-    if (
-        state is None
-        or not state.knowledge_base
-        or not state.document_embeddings
-    ):
-        return None, 0.0
+    Rules:
+    - Return only the corrected question on one line.
+    - Keep the same meaning and language.
+    - Do not answer it or add anything.
+    - If there is nothing to fix, return it unchanged.
 
+    Question: {question}
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                http_options=types.HttpOptions(timeout=8000)
+            ),
+        )
+    except Exception as exc:
+        print(f"Typo fix failed, using original question: {exc}")
+        return question
+
+    lines = (response.text or "").strip().splitlines()
+    fixed = lines[0].strip() if lines else ""
+
+    if not fixed or len(fixed) > 500:
+        return question
+
+    return fixed
+
+
+def _search(question, state):
     sub_questions = decompose_query(question)
 
     print("\n--- Decomposed Questions ---")
@@ -334,6 +360,29 @@ def retrieve_document(question, workspace_id=DEFAULT_WORKSPACE_ID):
         )
 
     print("----------------------------------\n")
+
+    return relevant_documents
+
+
+def retrieve_document(question, workspace_id=DEFAULT_WORKSPACE_ID):
+    state = get_state(workspace_id)
+
+    if (
+        state is None
+        or not state.knowledge_base
+        or not state.document_embeddings
+    ):
+        return None, 0.0
+
+    relevant_documents = _search(question, state)
+
+    # Nothing matched: retry once with typos fixed. Only misses pay for this.
+    if not relevant_documents:
+        fixed = _fix_typos(question)
+
+        if fixed.strip().lower() != question.strip().lower():
+            print(f"Retrying retrieval with corrected question: {fixed}")
+            relevant_documents = _search(fixed, state)
 
     if not relevant_documents:
         return None, 0.0
