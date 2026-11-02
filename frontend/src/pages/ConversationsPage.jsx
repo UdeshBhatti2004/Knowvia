@@ -11,10 +11,10 @@ import {
 import { API_URL, apiFetch } from '../services/api'
 
 const FILTERS = [
-  { value: '', label: 'All' },
-  { value: 'answered', label: 'Answered' },
   { value: 'not_found', label: 'Not found' },
+  { value: 'answered', label: 'Answered' },
   { value: 'off_topic', label: 'Off-topic' },
+  { value: '', label: 'All' },
 ]
 
 const OUTCOME_STYLES = {
@@ -56,6 +56,10 @@ function timeAgo(timestamp) {
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(date)
 }
 
+function itemKey(item) {
+  return `${item.outcome}:${item.question}`
+}
+
 function OutcomeBadge({ outcome }) {
   const style = OUTCOME_STYLES[outcome] ?? OUTCOME_STYLES.answered
   const Icon = style.icon
@@ -70,12 +74,31 @@ function OutcomeBadge({ outcome }) {
   )
 }
 
+function emptyCopy(filter) {
+  if (filter === 'not_found') {
+    return {
+      title: 'Nothing missing',
+      body: 'No customer question has gone unanswered. Great sign.',
+    }
+  }
+  if (filter) {
+    return {
+      title: 'Nothing here yet',
+      body: 'No conversations match this filter.',
+    }
+  }
+  return {
+    title: 'No customer questions yet',
+    body: 'Questions from your share link and website widget will show up here. Questions you ask in Test Assistant are not recorded.',
+  }
+}
+
 function ConversationsPage({ onNavigate }) {
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useState('not_found')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [openId, setOpenId] = useState(null)
+  const [openKey, setOpenKey] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -89,7 +112,9 @@ function ConversationsPage({ onNavigate }) {
         const query = new URLSearchParams({ limit: '100' })
         if (filter) query.set('outcome', filter)
 
-        const response = await apiFetch(`${API_URL}/conversations?${query}`)
+        const response = await apiFetch(
+          `${API_URL}/conversations/grouped?${query}`,
+        )
         const data = await response.json().catch(() => ({}))
 
         if (!response.ok) {
@@ -116,6 +141,7 @@ function ConversationsPage({ onNavigate }) {
   }, [filter, reloadKey])
 
   const showEmpty = !loading && !error && items.length === 0
+  const empty = emptyCopy(filter)
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
@@ -125,7 +151,8 @@ function ConversationsPage({ onNavigate }) {
             Conversations
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            What customers ask through your share link and widget.
+            What customers ask through your share link and widget. Repeated
+            questions are grouped.
           </p>
         </div>
 
@@ -147,7 +174,7 @@ function ConversationsPage({ onNavigate }) {
             type="button"
             onClick={() => {
               setFilter(f.value)
-              setOpenId(null)
+              setOpenKey(null)
             }}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               filter === f.value
@@ -189,13 +216,9 @@ function ConversationsPage({ onNavigate }) {
             <MessagesSquare size={18} />
           </div>
           <p className="mt-3 text-sm font-medium text-zinc-200">
-            {filter ? 'Nothing here yet' : 'No customer questions yet'}
+            {empty.title}
           </p>
-          <p className="mt-1 text-xs leading-5 text-zinc-500">
-            {filter
-              ? 'No conversations match this filter.'
-              : 'Questions from your share link and website widget will show up here. Questions you ask in Test Assistant are not recorded.'}
-          </p>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">{empty.body}</p>
           {!filter && (
             <button
               type="button"
@@ -211,16 +234,17 @@ function ConversationsPage({ onNavigate }) {
       {items.length > 0 && (
         <div className="mt-5 rounded-xl border border-white/[0.08] px-4">
           {items.map((item) => {
-            const isOpen = openId === item.id
+            const key = itemKey(item)
+            const isOpen = openKey === key
 
             return (
               <div
-                key={item.id}
+                key={key}
                 className="border-b border-white/[0.06] py-3 last:border-b-0"
               >
                 <button
                   type="button"
-                  onClick={() => setOpenId(isOpen ? null : item.id)}
+                  onClick={() => setOpenKey(isOpen ? null : key)}
                   aria-expanded={isOpen}
                   className="flex w-full items-start gap-3 text-left"
                 >
@@ -230,8 +254,13 @@ function ConversationsPage({ onNavigate }) {
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                       <OutcomeBadge outcome={item.outcome} />
+                      {item.count > 1 && (
+                        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                          ×{item.count}
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-500">
-                        {timeAgo(item.created_at)}
+                        {timeAgo(item.last_asked)}
                       </span>
                     </div>
                   </div>
