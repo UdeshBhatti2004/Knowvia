@@ -79,6 +79,7 @@ def test_login_wrong_password_and_unknown_email():
 
 def test_signup_rate_limited(monkeypatch):
     monkeypatch.setattr(auth_routes, "signup_limiter", RateLimiter([(60, 1)]))
+    monkeypatch.setattr(auth_routes, "password_limiter", RateLimiter([(60, 1000)]))
     assert signup(email="one@example.com").status_code == 200
     assert signup(email="two@example.com").status_code == 429
 
@@ -122,3 +123,54 @@ def test_rename_workspace_validation():
 
 def test_rename_workspace_requires_token():
     assert client.put("/auth/workspace", json={"name": "X"}).status_code == 401
+
+
+
+def _change(token, current="password123", new="newpassword456"):
+    return client.put(
+        "/auth/password",
+        json={"current_password": current, "new_password": new},
+        headers=_auth(token),
+    )
+
+
+def test_change_password_then_login_with_new():
+    token = signup().json()["token"]
+    res = _change(token)
+    assert res.status_code == 200
+    assert res.json()["token"]
+
+    old = client.post(
+        "/auth/login", json={"email": "a@example.com", "password": "password123"}
+    )
+    new = client.post(
+        "/auth/login", json={"email": "a@example.com", "password": "newpassword456"}
+    )
+    assert old.status_code == 401
+    assert new.status_code == 200
+
+
+def test_change_password_wrong_current():
+    token = signup().json()["token"]
+    assert _change(token, current="wrong-password").status_code == 401
+
+
+def test_change_password_validation():
+    token = signup().json()["token"]
+    assert _change(token, new="short").status_code == 422
+    assert _change(token, new="password123").status_code == 422
+
+
+def test_change_password_requires_token():
+    res = client.put(
+        "/auth/password",
+        json={"current_password": "password123", "new_password": "newpassword456"},
+    )
+    assert res.status_code == 401
+
+
+def test_change_password_rate_limited(monkeypatch):
+    token = signup().json()["token"]
+    monkeypatch.setattr(auth_routes, "password_limiter", RateLimiter([(60, 1)]))
+    assert _change(token, current="wrong-password").status_code == 401
+    assert _change(token, current="wrong-password").status_code == 429

@@ -42,3 +42,10 @@ def get_by_email(email: str) -> dict | None:
 
 def get_by_id(user_id: str) -> dict | None:
     return _col().find_one({"_id": user_id})
+
+
+def update_password_hash(user_id: str, password_hash: str) -> bool:
+    result = _col().update_one(
+        {"_id": user_id}, {"$set": {"password_hash": password_hash}}
+    )
+    return result.matched_count == 1

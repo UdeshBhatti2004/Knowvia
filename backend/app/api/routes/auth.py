@@ -13,6 +13,7 @@ router = APIRouter(prefix="/auth")
 
 limiter = RateLimiter(config.LOGIN_RATE_LIMITS)
 signup_limiter = RateLimiter(config.LOGIN_RATE_LIMITS)
+password_limiter = RateLimiter(config.LOGIN_RATE_LIMITS)
 
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
@@ -33,6 +34,10 @@ class SignupRequest(BaseModel):
 
 class WorkspaceUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
 
 
 def _throttle(rate_limiter: RateLimiter, request: Request) -> None:
@@ -128,3 +133,33 @@ def update_workspace_route(
         raise HTTPException(status_code=404, detail="Workspace not found.")
 
     return {"ok": True, "workspace_name": workspace["name"]}
+
+
+@router.put("/password")
+def change_password_route(
+    payload: PasswordChange,
+    request: Request,
+    claims: dict = Depends(require_account),
+):
+    _throttle(password_limiter, request)
+
+    user = user_repository.get_by_id(claims["user_id"])
+    workspace = workspace_repository.get_by_id(claims["workspace_id"])
+
+    if not user or not workspace:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+
+    if not verify_password(payload.current_password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Wrong current password.")
+
+    if payload.new_password == payload.current_password:
+        raise HTTPException(
+            status_code=422,
+            detail="New password must be different.",
+        )
+
+    user_repository.update_password_hash(
+        user["_id"], hash_password(payload.new_password)
+    )
+
+    return _session(user, workspace)
