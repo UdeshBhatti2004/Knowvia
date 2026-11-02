@@ -1,8 +1,15 @@
 import time
 
-from google.genai import errors
+import httpx
+from google.genai import errors, types
 
 from app.core.ai_client import client
+
+PRIMARY_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_MODEL = "gemini-2.5-flash"
+CALL_TIMEOUT_MS = 12_000
+TOTAL_BUDGET_SECONDS = 30
+ATTEMPTS_PER_MODEL = 2
 
 
 class AnswerQuotaExceeded(Exception):
@@ -16,14 +23,8 @@ def _is_daily_quota_error(exc) -> bool:
     return exc.code == 429 and "perday" in text
 
 
-def generate_answer(question: str, context: str) -> str:
-    max_attempts = 3
-
-    for attempt in range(max_attempts):
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
-                contents=f"""
+def _build_prompt(question: str, context: str) -> str:
+    return f"""
                 You are a polite, professional, and helpful AI assistant for a business knowledge base.
 
                 Answer user questions using only the information provided in the context.
@@ -45,33 +46,65 @@ def generate_answer(question: str, context: str) -> str:
                 {question}
 
                 Answer:
-                """,
-            )
+                """
 
-            if not response.text:
-                raise RuntimeError("Gemini returned an empty answer.")
 
-            return response.text.strip()
+def generate_answer(question: str, context: str) -> str:
+    prompt = _build_prompt(question, context)
+    config = types.GenerateContentConfig(
+        http_options=types.HttpOptions(timeout=CALL_TIMEOUT_MS)
+    )
+    deadline = time.monotonic() + TOTAL_BUDGET_SECONDS
+    last_exc: Exception | None = None
 
-        except errors.APIError as exc:
-            print(
-                f"Gemini generation failed "
-                f"(attempt {attempt + 1}): {exc}"
-            )
+    for model in (PRIMARY_MODEL, FALLBACK_MODEL):
+        for attempt in range(ATTEMPTS_PER_MODEL):
+            if time.monotonic() >= deadline:
+                break
 
-            if _is_daily_quota_error(exc):
-                raise AnswerQuotaExceeded(
-                    "Daily Gemini answer limit reached."
-                ) from exc
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config,
+                )
 
-            if exc.code not in (429, 500, 502, 503, 504):
+                if not response.text:
+                    raise RuntimeError("Gemini returned an empty answer.")
+
+                return response.text.strip()
+
+            except errors.APIError as exc:
+                print(
+                    f"Gemini generation failed "
+                    f"({model}, attempt {attempt + 1}): {exc}"
+                )
+
+                if _is_daily_quota_error(exc):
+                    raise AnswerQuotaExceeded(
+                        "Daily Gemini answer limit reached."
+                    ) from exc
+
+                if exc.code not in (429, 500, 502, 503, 504):
+                    raise
+
+                last_exc = exc
+
+            except httpx.TimeoutException as exc:
+                print(
+                    f"Gemini timed out "
+                    f"({model}, attempt {attempt + 1}): {exc}"
+                )
+                last_exc = exc
+
+            except Exception as exc:
+                print(f"Unexpected error during answer generation: {exc}")
                 raise
 
-            if attempt == max_attempts - 1:
-                raise
+            if attempt < ATTEMPTS_PER_MODEL - 1:
+                time.sleep(1)
 
-            time.sleep(2 ** attempt)
+    if last_exc is not None:
+        raise last_exc
 
-        except Exception as exc:
-            print(f"Unexpected error during answer generation: {exc}")
-            raise
+    raise RuntimeError("Answer generation ran out of time.")

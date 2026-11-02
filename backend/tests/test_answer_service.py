@@ -77,6 +77,7 @@ def test_server_errors_are_retried_then_raised():
         FakeAPIError(503, "503 UNAVAILABLE."),
         FakeAPIError(503, "503 UNAVAILABLE."),
         FakeAPIError(503, "503 UNAVAILABLE."),
+        FakeAPIError(503, "503 UNAVAILABLE."),
     )
 
     with (
@@ -86,7 +87,7 @@ def test_server_errors_are_retried_then_raised():
         with pytest.raises(errors.APIError):
             generate_answer("refund?", "context")
 
-    assert client.models.generate_content.call_count == 3
+    assert client.models.generate_content.call_count == 4
 
 
 def test_client_errors_are_not_retried():
