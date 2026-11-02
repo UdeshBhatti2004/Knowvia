@@ -16,11 +16,8 @@ import { API_URL, apiFetch } from '../services/api'
 // How often (in milliseconds) to re-check while a file is processing.
 const POLL_INTERVAL_MS = 3000
 
-// Still static: there is no test history yet. Replace when it gets a backend.
-const setup = {
-  tested: false,
-  lastTest: null,
-}
+
+  const [testedAt, setTestedAt] = useState(null)
 
 // Must match the defaults in backend/app/schemas/assistant.py.
 // Anything different from these counts as "configured".
@@ -133,25 +130,38 @@ function OverviewPage({ onNavigate, onAskSample }) {
   }, [fetchSources])
 
   // Configured = the saved settings differ from the backend defaults.
+  // Tested = the owner has run a real question from the dashboard.
   useEffect(() => {
     let cancelled = false
 
     async function checkAssistant() {
       try {
         const response = await apiFetch(`${API_URL}/assistant`)
-        if (!response.ok) return
-        const data = await response.json()
-        if (cancelled) return
-        setAssistantConfigured(
-          data.name !== BACKEND_DEFAULTS.name ||
-            data.welcome_message !== BACKEND_DEFAULTS.welcome_message ||
-            data.fallback_message !== BACKEND_DEFAULTS.fallback_message,
-        )
+        if (response.ok) {
+          const data = await response.json()
+          if (!cancelled) {
+            setAssistantConfigured(
+              data.name !== BACKEND_DEFAULTS.name ||
+                data.welcome_message !== BACKEND_DEFAULTS.welcome_message ||
+                data.fallback_message !== BACKEND_DEFAULTS.fallback_message,
+            )
+          }
+        }
       } catch {
         // Leave it as "not configured". Overview still works.
-      } finally {
-        if (!cancelled) setAssistantChecked(true)
       }
+
+      try {
+        const response = await apiFetch(`${API_URL}/assistant/status`)
+        if (response.ok) {
+          const data = await response.json()
+          if (!cancelled) setTestedAt(data.tested_at || null)
+        }
+      } catch {
+        // Leave it as "not tested".
+      }
+
+      if (!cancelled) setAssistantChecked(true)
     }
 
     checkAssistant()
@@ -177,7 +187,8 @@ function OverviewPage({ onNavigate, onAskSample }) {
     return () => clearInterval(timer)
   }, [hasProcessing, fetchSources])
 
-  const { tested, lastTest } = setup
+  const tested = Boolean(testedAt)
+  const lastTest = testedAt ? timeAgo(testedAt) : null
 
   const hasDocuments = sources.length > 0
   // Failed uploads do not count as "documents added".

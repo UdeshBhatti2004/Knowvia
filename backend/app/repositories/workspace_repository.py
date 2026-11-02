@@ -46,3 +46,10 @@ def rename_workspace(workspace_id: str, name: str) -> dict | None:
     if result.matched_count == 0:
         return None
     return get_by_id(workspace_id)
+
+def mark_tested(workspace_id: str) -> None:
+    """Remember that the owner ran a real test question from the dashboard."""
+    _col().update_one(
+        {"_id": workspace_id},
+        {"$set": {"tested_at": datetime.now(timezone.utc).isoformat()}},
+    )

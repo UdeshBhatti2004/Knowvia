@@ -9,6 +9,7 @@ from app.services.answer_service import AnswerQuotaExceeded, generate_answer
 from app.services.knowledge_service import retrieve_knowledge
 from app.schemas.assistant import DEFAULT_FALLBACK_MESSAGE
 from app.services.assistant_service import get_assistant_settings
+from app.repositories import workspace_repository
 
 
 router = APIRouter()
@@ -23,13 +24,23 @@ def _fallback_message(workspace_id: str = DEFAULT_WORKSPACE_ID) -> str:
         return DEFAULT_FALLBACK_MESSAGE
 
 
+def _record_test(workspace_id: str) -> None:
+    # Never let this break /ask.
+    try:
+        workspace_repository.mark_tested(workspace_id)
+    except Exception as exc:
+        print(f"Could not record test time: {exc}")
+
+
 @router.post("/ask")
 def ask_endpoint(
     request: QuestionRequest, workspace_id: str = Depends(require_user)
 ):
     ensure_loaded(workspace_id)
-    return ask_question(request, workspace_id)
-
+    result = ask_question(request, workspace_id)
+    # Only reached when the ask succeeded (errors raise before this).
+    _record_test(workspace_id)
+    return result
 
 def ask_question(request: QuestionRequest, workspace_id: str = DEFAULT_WORKSPACE_ID):
     try:
