@@ -33,37 +33,23 @@ def _docs_dir(workspace_id: str) -> Path:
 
 
 def _refresh(workspace_id: str) -> None:
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        refresh_knowledge_base()
-    else:
-        refresh_knowledge_base(workspace_id)
+    refresh_knowledge_base(workspace_id)
 
 
 def _load(workspace_id: str) -> dict:
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        return load_sources_metadata()
     return load_sources_metadata(workspace_id)
 
 
 def _save(metadata: dict, workspace_id: str) -> None:
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        save_sources_metadata(metadata)
-    else:
-        save_sources_metadata(metadata, workspace_id)
+    save_sources_metadata(metadata, workspace_id)
 
 
 def _put(name: str, data: bytes, workspace_id: str) -> None:
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        put_blob("pdf", name, data)
-    else:
-        put_blob("pdf", name, data, workspace_id)
+    put_blob("pdf", name, data, workspace_id)
 
 
 def _delete(name: str, workspace_id: str) -> None:
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        delete_blob("pdf", name)
-    else:
-        delete_blob("pdf", name, workspace_id)
+    delete_blob("pdf", name, workspace_id)
 
 
 def _set_record(
@@ -299,10 +285,7 @@ async def upload_source(
             detail="Unable to save file metadata. Please try again.",
         ) from exc
 
-    if workspace_id == DEFAULT_WORKSPACE_ID:
-        background_tasks.add_task(process_upload, destination.name)
-    else:
-        background_tasks.add_task(process_upload, destination.name, workspace_id)
+    background_tasks.add_task(process_upload, destination.name, workspace_id)
 
     return {
         "message": "PDF received. Processing has started.",

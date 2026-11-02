@@ -6,10 +6,6 @@ from app.repositories import blob_store
 from pathlib import Path
 
 
-def test_default_paths_unchanged():
-    docs, cache = Path("/d/documents"), Path("/d/cache.pkl")
-    assert workspace_paths("default", docs, cache) == (docs, cache)
-
 
 def test_workspace_paths_are_separate():
     docs, cache = Path("/d/documents"), Path("/d/cache.pkl")

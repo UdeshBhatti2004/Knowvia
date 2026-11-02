@@ -147,8 +147,8 @@ def test_ask_returns_502_when_answer_generation_fails():
 def test_sources_returns_all_pdfs_and_empty_list(tmp_path):
     with (
         patch(
-            "app.services.source_service.DOCUMENTS_DIR",
-            tmp_path,
+            "app.services.source_service._docs_dir",
+            lambda workspace_id: tmp_path,
         ),
         patch(
             "app.services.source_service.load_sources_metadata",

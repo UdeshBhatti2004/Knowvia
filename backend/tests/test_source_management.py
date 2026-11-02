@@ -44,19 +44,19 @@ def fake_storage(documents_dir, metadata=None):
     touch the real knowledge base or the real files."""
     store = {} if metadata is None else metadata
 
-    def fake_save(data):
+    def fake_save(data, workspace_id=None):
         # Replace the in-memory "file" with the new data.
         store.clear()
         store.update(data)
 
     with (
-        patch.object(source_service, "DOCUMENTS_DIR", documents_dir),
+        patch.object(source_service, "_docs_dir", lambda workspace_id: documents_dir),
         # Replace the real (slow, Gemini-calling) refresh with a fake.
         patch.object(source_service, "refresh_knowledge_base") as refresh,
         patch.object(
             source_service,
             "load_sources_metadata",
-            side_effect=lambda: dict(store),
+            side_effect=lambda workspace_id=None: dict(store),
         ),
         patch.object(
             source_service,
@@ -72,7 +72,6 @@ def fake_storage(documents_dir, metadata=None):
         ),
     ):
         yield SimpleNamespace(refresh=refresh, save=save, store=store)
-
 
 # ---------- upload ----------
 
