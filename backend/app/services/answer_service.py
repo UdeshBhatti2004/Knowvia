@@ -11,6 +11,9 @@ CALL_TIMEOUT_MS = 12_000
 TOTAL_BUDGET_SECONDS = 30
 ATTEMPTS_PER_MODEL = 2
 
+# The model replies with exactly this when the question is not about the business.
+OFF_TOPIC_MARKER = "[[OFF_TOPIC]]"
+
 
 class AnswerQuotaExceeded(Exception):
     """The daily limit for answer generation has been used up."""
@@ -34,10 +37,16 @@ def _build_prompt(question: str, context: str) -> str:
                 2. Never invent facts, prices, dates, policies, or contact details.
                 3. Answer the user's actual question directly and concisely.
                 4. Preserve policy conditions, restrictions, and time limits accurately.
-                5. If information is missing, say:
+                5. If the question is about the business but the information is missing, say:
                 "Sorry, I couldn't find relevant information in the available documents."
                 6. If the context contains conflicting information, explain the conflict.
                 7. Do not mention similarity scores, embeddings, or internal implementation details.
+                8. If the question has nothing to do with the business (general knowledge,
+                coding, news, math, personal advice, opinions, or anything unrelated to
+                what a customer would ask this business), reply with exactly
+                {OFF_TOPIC_MARKER} and nothing else.
+                9. For a simple greeting or thanks, reply with one short friendly sentence
+                and invite a question about the business.
 
                 Context:
                 {context}

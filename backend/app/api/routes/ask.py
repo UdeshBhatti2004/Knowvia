@@ -5,7 +5,11 @@ from app.api.auth import require_user
 from app.knowledge.workspace_loader import ensure_loaded
 from app.repositories.settings_store import DEFAULT_WORKSPACE_ID
 from app.schemas.question import QuestionRequest
-from app.services.answer_service import AnswerQuotaExceeded, generate_answer
+from app.services.answer_service import (
+    OFF_TOPIC_MARKER,
+    AnswerQuotaExceeded,
+    generate_answer,
+)
 from app.services.knowledge_service import retrieve_knowledge
 from app.schemas.assistant import DEFAULT_FALLBACK_MESSAGE
 from app.services.assistant_service import get_assistant_settings
@@ -13,6 +17,11 @@ from app.repositories import workspace_repository
 
 
 router = APIRouter()
+
+OFF_TOPIC_MESSAGE = (
+    "I'm this business's assistant, so I can only help with questions about it. "
+    "Try asking about our fees, timings, policies or services."
+)
 
 
 def _fallback_message(workspace_id: str = DEFAULT_WORKSPACE_ID) -> str:
@@ -108,6 +117,17 @@ def ask_question(request: QuestionRequest, workspace_id: str = DEFAULT_WORKSPACE
             status_code=502,
             detail="Answer generation failed. Please try again later.",
         ) from exc
+
+    # Not a business question: clear message, no sources.
+    if OFF_TOPIC_MARKER in answer:
+        return {
+            "question": request.question,
+            "answer": OFF_TOPIC_MESSAGE,
+            "source": None,
+            "page": None,
+            "similarity": None,
+            "sources": [],
+        }
 
     # The model is told to use this exact sentence when the context has no
     # answer. Swap it for the saved fallback.
