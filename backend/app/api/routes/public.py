@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.client_ip import get_client_ip
-from app.api.routes.ask import ask_question
+from app.api.routes.ask import OFF_TOPIC_MESSAGE, ask_question
 from app.core.config import PUBLIC_RATE_LIMITS
 from app.knowledge.workspace_loader import ensure_loaded
+from app.repositories import conversation_repository
 from app.schemas.question import QuestionRequest
 from app.services.assistant_service import get_assistant_settings
 from app.services.rate_limiter import RateLimiter
@@ -35,6 +36,28 @@ def enforce_rate_limit(request: Request) -> None:
             detail="Too many questions. Please wait a moment and try again.",
             headers={"Retry-After": str(wait)},
         )
+
+
+def _outcome(answer: str, sources: list) -> str:
+    if answer == OFF_TOPIC_MESSAGE:
+        return "off_topic"
+    if not sources:
+        return "not_found"
+    return "answered"
+
+
+def _log(workspace_id: str, question: str, answer: str, sources: list) -> None:
+    # Never let logging break the customer's answer.
+    try:
+        conversation_repository.log_conversation(
+            workspace_id,
+            question,
+            answer,
+            _outcome(answer, sources),
+            [s["source"] for s in sources],
+        )
+    except Exception as exc:
+        print(f"Could not log conversation: {exc}")
 
 
 router = APIRouter(prefix="/public")
@@ -91,11 +114,13 @@ async def public_ask_route(
         ask_question, QuestionRequest(question=body.question), workspace_id
     )
 
+    sources = [
+        {"source": s["source"], "page": s["page"]} for s in result["sources"]
+    ]
+
+    await asyncio.to_thread(
+        _log, workspace_id, body.question, result["answer"], sources
+    )
+
     # Only what the chat needs: no similarity scores or internals.
-    return {
-        "answer": result["answer"],
-        "sources": [
-            {"source": s["source"], "page": s["page"]}
-            for s in result["sources"]
-        ],
-    }
+    return {"answer": result["answer"], "sources": sources}
