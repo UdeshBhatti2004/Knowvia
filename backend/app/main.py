@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import require_user
+from app.api.routes.conversations import router as conversations_router
 from app.api.routes.ask import router as ask_router
 from app.api.routes.assistant import router as assistant_router
 from app.api.routes.auth import router as auth_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(ask_router, dependencies=authed)
     app.include_router(sources_router, dependencies=authed)
     app.include_router(assistant_router, dependencies=authed)
+    app.include_router(conversations_router, dependencies=authed)    
 
     # Open or self-protected: login, public widget (widget key), widget routes
     # (per-route protection inside widget.py).
