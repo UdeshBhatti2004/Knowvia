@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from app.core import db as _db
 
 COLLECTION = "conversations"
+GROUP_SCAN_LIMIT = 1000
 
 
 def _col():
@@ -52,3 +53,44 @@ def list_recent(
         }
         for doc in cursor
     ]
+
+
+def _normalize(question: str) -> str:
+    text = " ".join(question.lower().split())
+    return text.rstrip("?!. ")
+
+
+def list_grouped(
+    workspace_id: str, limit: int = 50, outcome: str | None = None
+) -> list[dict]:
+    """Group repeated questions (same normalized text + same outcome).
+
+    Scans only the most recent GROUP_SCAN_LIMIT rows. Sorted by count desc,
+    then most recently asked. Question/answer/sources come from the latest ask.
+    """
+    query = {"workspace_id": workspace_id}
+    if outcome:
+        query["outcome"] = outcome
+
+    cursor = _col().find(query).sort("created_at", -1).limit(GROUP_SCAN_LIMIT)
+
+    groups: dict[tuple[str, str], dict] = {}
+    for doc in cursor:  # newest first, so first seen = latest
+        key = (_normalize(doc["question"]), doc["outcome"])
+        group = groups.get(key)
+        if group is None:
+            groups[key] = {
+                "question": doc["question"],
+                "answer": doc["answer"],
+                "outcome": doc["outcome"],
+                "sources": doc.get("sources", []),
+                "count": 1,
+                "last_asked": doc["created_at"],
+            }
+        else:
+            group["count"] += 1
+
+    items = sorted(
+        groups.values(), key=lambda g: (g["count"], g["last_asked"]), reverse=True
+    )
+    return items[:limit]
