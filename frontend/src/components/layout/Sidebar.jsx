@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Files,
   MessageSquare,
+  MessagesSquare,
   SlidersHorizontal,
   Settings2,
   PanelLeftClose,
