@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { BrainCircuit, Loader2, AlertCircle } from 'lucide-react'
 import { login, signup } from '../services/api'
+import PasswordInput from '../components/PasswordInput'
 
-const inputClass =
-  'mt-3 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:border-violet-500/60 focus:bg-white/[0.05]'
+const inputBase =
+  'w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:border-violet-500/60 focus:bg-white/[0.05]'
+const inputClass = `mt-3 ${inputBase}`
 
 function LoginPage({ onLoggedIn }) {
   // 'signin' | 'signup'
@@ -94,13 +96,14 @@ function LoginPage({ onLoggedIn }) {
           className={isSignup ? inputClass : `${inputClass} mt-5`}
         />
 
-        <input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder={isSignup ? 'Password (8+ characters)' : 'Password'}
           autoComplete={isSignup ? 'new-password' : 'current-password'}
-          className={inputClass}
+          maxLength={200}
+          wrapperClassName="mt-3"
+          className={inputBase}
         />
 
         {error && (

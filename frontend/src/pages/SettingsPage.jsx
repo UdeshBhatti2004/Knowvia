@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Building2, User, Save, RotateCcw } from 'lucide-react'
+import { Building2, User, Save, RotateCcw, KeyRound } from 'lucide-react'
 
-import { getMe, updateWorkspace } from '../services/api'
+import { changePassword, getMe, updateWorkspace } from '../services/api'
+import PasswordInput from '../components/PasswordInput'
 
 const inputClass =
   'w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:border-violet-500/60 focus:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60'
@@ -33,12 +34,36 @@ function SectionCard({ icon: Icon, title, description, children }) {
   )
 }
 
+function StatusText({ status }) {
+  if (!status) return null
+  return (
+    <span
+      className={`text-sm ${
+        status.type === 'ok' ? 'text-emerald-400' : 'text-red-400'
+      }`}
+    >
+      {status.text}
+    </span>
+  )
+}
+
+function Hint({ show, children }) {
+  if (!show) return null
+  return <p className="mt-1.5 text-xs text-red-400">{children}</p>
+}
+
 function SettingsPage() {
   const [me, setMe] = useState(null)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null) // { type: 'ok' | 'error', text }
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordStatus, setPasswordStatus] = useState(null)
 
   useEffect(() => {
     getMe()
@@ -74,6 +99,37 @@ function SettingsPage() {
       setSaving(false)
     }
   }
+
+  const passwordReady =
+    currentPassword.length > 0 &&
+    newPassword.length > 0 &&
+    confirmPassword.length > 0
+
+  const newTooShort = newPassword.length > 0 && newPassword.length < 8
+  const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword
+  const sameAsCurrent =
+    newPassword.length > 0 && newPassword === currentPassword
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault()
+    if (!passwordReady || newTooShort || mismatch || sameAsCurrent) return
+
+    setChangingPassword(true)
+    setPasswordStatus(null)
+    try {
+      await changePassword(currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordStatus({ type: 'ok', text: 'Password changed.' })
+    } catch (err) {
+      setPasswordStatus({ type: 'error', text: err.message })
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const clearPasswordStatus = () => setPasswordStatus(null)
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
@@ -144,16 +200,80 @@ function SettingsPage() {
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
-          {status && (
-            <span
-              className={`text-sm ${
-                status.type === 'ok' ? 'text-emerald-400' : 'text-red-400'
-              }`}
-            >
-              {status.text}
-            </span>
-          )}
+          <StatusText status={status} />
         </div>
+      </form>
+
+      <form
+        onSubmit={handlePasswordChange}
+        className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2"
+      >
+        <SectionCard
+          icon={KeyRound}
+          title="Password"
+          description="New password needs at least 8 characters."
+        >
+          <Field label="Current password">
+            <PasswordInput
+              value={currentPassword}
+              onChange={(e) => {
+                setCurrentPassword(e.target.value)
+                clearPasswordStatus()
+              }}
+              autoComplete="current-password"
+              maxLength={200}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="New password">
+            <PasswordInput
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value)
+                clearPasswordStatus()
+              }}
+              autoComplete="new-password"
+              maxLength={200}
+              className={inputClass}
+            />
+            <Hint show={newTooShort}>
+              Too short: {newPassword.length}/8 characters.
+            </Hint>
+            <Hint show={sameAsCurrent}>
+              New password must be different from the current one.
+            </Hint>
+          </Field>
+          <Field label="Confirm new password">
+            <PasswordInput
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value)
+                clearPasswordStatus()
+              }}
+              autoComplete="new-password"
+              maxLength={200}
+              className={inputClass}
+            />
+            <Hint show={mismatch}>Passwords don't match.</Hint>
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={
+                changingPassword ||
+                !passwordReady ||
+                newTooShort ||
+                mismatch ||
+                sameAsCurrent
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <KeyRound className="h-4 w-4" />
+              {changingPassword ? 'Changing...' : 'Change password'}
+            </button>
+            <StatusText status={passwordStatus} />
+          </div>
+        </SectionCard>
       </form>
     </section>
   )

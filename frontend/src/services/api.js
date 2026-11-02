@@ -13,14 +13,17 @@ export function clearToken() {
 
 // fetch wrapper for the dashboard API. Adds the token, and on a 401
 // clears it and tells the app to show the login screen.
+// Pass { skipLogoutOn401: true } for calls where a 401 means "wrong input",
+// not "session expired".
 export async function apiFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {})
+  const { skipLogoutOn401, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers || {})
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(url, { ...options, headers })
+  const response = await fetch(url, { ...fetchOptions, headers })
 
-  if (response.status === 401) {
+  if (response.status === 401 && !skipLogoutOn401) {
     clearToken()
     window.dispatchEvent(new Event('knowvia:logout'))
   }
@@ -44,6 +47,38 @@ export async function updateWorkspace(name) {
   if (!response.ok) throw new Error('Could not save. Try again.')
   const data = await response.json()
   window.dispatchEvent(new Event('knowvia:account-updated'))
+  return data
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const response = await apiFetch(`${API_URL}/auth/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+    skipLogoutOn401: true,
+  })
+
+  if (response.status === 429) {
+    throw new Error('Too many attempts. Try again in a few minutes.')
+  }
+  if (response.status === 401) {
+    // Wrong current password, or the session really expired.
+    const stillSignedIn = await apiFetch(`${API_URL}/auth/me`)
+    if (stillSignedIn.ok) throw new Error('Current password is wrong.')
+    throw new Error('Session expired. Sign in again.')
+  }
+  if (response.status === 422) {
+    throw new Error(
+      'Use a new password of at least 8 characters, different from the current one.',
+    )
+  }
+  if (!response.ok) throw new Error('Could not change password. Try again.')
+
+  const data = await response.json()
+  localStorage.setItem(TOKEN_KEY, data.token)
   return data
 }
 
