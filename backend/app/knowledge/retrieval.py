@@ -266,7 +266,7 @@ def _fix_typos(question):
             model="gemini-3.5-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
-                http_options=types.HttpOptions(timeout=8000)
+                http_options=types.HttpOptions(timeout=10000)
             ),
         )
     except Exception as exc:
