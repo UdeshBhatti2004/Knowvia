@@ -69,9 +69,20 @@ def ask_question(request: QuestionRequest, workspace_id: str = DEFAULT_WORKSPACE
         ) from exc
 
     if not documents:
+        # Nothing matched. Let the model tell off-topic from missing info.
+        try:
+            probe = generate_answer(request.question, "")
+        except Exception as exc:
+            print(f"No-context answer failed: {exc}")
+            probe = ""
+
         return {
             "question": request.question,
-            "answer": _fallback_message(workspace_id),
+            "answer": (
+                OFF_TOPIC_MESSAGE
+                if OFF_TOPIC_MARKER in probe
+                else _fallback_message(workspace_id)
+            ),
             "source": None,
             "page": None,
             "similarity": None,

@@ -56,9 +56,15 @@ def test_upload_rolls_back_file_when_metadata_save_fails(tmp_path):
 
 
 def test_ask_returns_fallback_when_no_document_found():
-    with patch(
-        "app.api.routes.ask.retrieve_knowledge",
-        return_value=(None, 0.0),
+    with (
+        patch(
+            "app.api.routes.ask.retrieve_knowledge",
+            return_value=(None, 0.0),
+        ),
+        patch(
+            "app.api.routes.ask.generate_answer",
+            return_value="Sorry, I couldn't find relevant information in the available documents.",
+        ),
     ):
         response = client.post(
             "/ask",
@@ -172,3 +178,23 @@ def test_sources_returns_all_pdfs_and_empty_list(tmp_path):
         "second.pdf",
     }
     assert all(source.get("uploaded_at") for source in sources)
+
+
+def test_ask_returns_off_topic_message_when_no_document_found():
+    with (
+        patch(
+            "app.api.routes.ask.retrieve_knowledge",
+            return_value=(None, 0.0),
+        ),
+        patch(
+            "app.api.routes.ask.generate_answer",
+            return_value="[[OFF_TOPIC]]",
+        ),
+    ):
+        response = client.post(
+            "/ask",
+            json={"question": "What is the capital of France?"},
+        )
+
+    assert response.status_code == 200
+    assert "only help with questions about it" in response.json()["answer"]

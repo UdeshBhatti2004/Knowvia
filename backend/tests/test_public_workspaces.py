@@ -75,6 +75,10 @@ def test_public_ask_uses_workspace_fallback(monkeypatch):
         ask_route, "retrieve_knowledge", lambda q, workspace_id="default": (None, 0.0)
     )
 
+    monkeypatch.setattr(ask_route, "generate_answer", lambda q, c: "no info")
+
+    
+
     res = client.post(
         "/public/ask",
         headers={"X-Widget-Key": key_a},
