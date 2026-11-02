@@ -7,6 +7,8 @@ import {
   AlertCircle,
   Globe,
   Save,
+  Link2,
+  ExternalLink,
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
 
@@ -15,6 +17,7 @@ function InstallPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const [domainsText, setDomainsText] = useState('')
   const [savedDomainsText, setSavedDomainsText] = useState('')
@@ -58,14 +61,15 @@ function InstallPage() {
   }, [])
 
   const snippet = `<script src="${window.location.origin}/widget.js" data-key="${publicKey}"></script>`
+  const shareLink = `${window.location.origin}/chat?key=${encodeURIComponent(publicKey)}`
 
-  async function handleCopy() {
+  async function copyText(text, setFlag) {
     try {
-      await navigator.clipboard.writeText(snippet)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(text)
+      setFlag(true)
+      setTimeout(() => setFlag(false), 2000)
     } catch {
-      setError('Copy failed. Select the snippet and copy it manually.')
+      setError('Copy failed. Select the text and copy it manually.')
     }
   }
 
@@ -121,7 +125,8 @@ function InstallPage() {
           Install
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Add your assistant to your website with one line of code.
+          Give your customers the assistant: share a link, or add it to your
+          website.
         </p>
       </div>
 
@@ -129,11 +134,76 @@ function InstallPage() {
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-300">
+              <Link2 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-zinc-100">
+                Share link
+              </h2>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                No website needed. Send this link on WhatsApp, Instagram, email
+                or print it as a QR code. Customers open it and chat.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            {loading && (
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            )}
+
+            {!loading && publicKey && (
+              <div className="rounded-lg border border-white/[0.08] bg-black/30">
+                <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
+                  <span className="text-xs text-zinc-500">Link</span>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={shareLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.07]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => copyText(shareLink, setLinkCopied)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.07]"
+                    >
+                      {linkCopied ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                      {linkCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <p className="break-all p-3 text-xs leading-relaxed text-zinc-200">
+                  {shareLink}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-4 text-xs text-zinc-500">
+            Anyone with this link can ask questions. They cannot see or change
+            your documents or settings.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-300">
               <Code className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-zinc-100">
-                Embed snippet
+                Embed on your website
               </h2>
               <p className="mt-0.5 text-sm text-zinc-500">
                 Paste this just before the closing &lt;/body&gt; tag on every
@@ -156,7 +226,7 @@ function InstallPage() {
                   <span className="text-xs text-zinc-500">HTML</span>
                   <button
                     type="button"
-                    onClick={handleCopy}
+                    onClick={() => copyText(snippet, setCopied)}
                     className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.07]"
                   >
                     {copied ? (
@@ -198,7 +268,7 @@ function InstallPage() {
               </h2>
               <p className="mt-0.5 text-sm text-zinc-500">
                 Only these websites can show your chat bubble. Leave empty to
-                allow any website.
+                allow any website. This does not affect the share link above.
               </p>
             </div>
           </div>
