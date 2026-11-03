@@ -78,11 +78,22 @@ export default function PublicChatPage() {
       })
 
       if (response.status === 429) {
-        const wait = response.headers.get('Retry-After')
+        // Two different 429s: the monthly plan limit, and the per-visitor
+        // rate limit. Tell them apart by the message in the body.
+        let detail = ''
+        try {
+          detail = (await response.json()).detail || ''
+        } catch {
+          // body was not JSON, treat as a normal rate limit
+        }
+
+        if (String(detail).includes('monthly question limit')) {
+          throw new Error(
+            'This assistant is unavailable right now. Please contact the business directly.',
+          )
+        }
         throw new Error(
-          wait
-            ? `Too many questions. Try again in ${wait}s.`
-            : 'Too many questions. Try again later.',
+          'Too many questions. Please wait a moment and try again.',
         )
       }
       if (response.status === 422) {
