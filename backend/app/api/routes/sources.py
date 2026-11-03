@@ -10,6 +10,7 @@ from app.services.source_service import (
     get_sources,
     upload_source,
 )
+from app.services.usage_service import check_can_upload
 
 
 router = APIRouter()
@@ -22,6 +23,7 @@ async def upload_source_route(
     workspace_id: str = Depends(require_user),
 ):
     await asyncio.to_thread(ensure_loaded, workspace_id)
+    await asyncio.to_thread(check_can_upload, workspace_id)
     return await upload_source(file, background_tasks, workspace_id)
 
 

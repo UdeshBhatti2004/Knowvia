@@ -94,3 +94,12 @@ def list_grouped(
         groups.values(), key=lambda g: (g["count"], g["last_asked"]), reverse=True
     )
     return items[:limit]
+
+
+
+
+def count_since(workspace_id: str, since_iso: str) -> int:
+    """Number of logged customer questions at or after since_iso."""
+    return _col().count_documents(
+        {"workspace_id": workspace_id, "created_at": {"$gte": since_iso}}
+    )

@@ -11,6 +11,7 @@ from app.repositories import conversation_repository
 from app.schemas.question import QuestionRequest
 from app.services.assistant_service import get_assistant_settings
 from app.services.rate_limiter import RateLimiter
+from app.services.usage_service import check_can_ask
 from app.services.widget_service import resolve_workspace
 
 limiter = RateLimiter(PUBLIC_RATE_LIMITS)
@@ -107,6 +108,9 @@ def public_assistant_route(workspace_id: str = Depends(require_widget_key)):
 async def public_ask_route(
     body: PublicQuestion, workspace_id: str = Depends(require_widget_key)
 ):
+    # Monthly plan limit, checked before any Gemini call.
+    await asyncio.to_thread(check_can_ask, workspace_id)
+
     await asyncio.to_thread(ensure_loaded, workspace_id)
 
     # Same retrieval and answer logic as the dashboard /ask.

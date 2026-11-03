@@ -40,6 +40,12 @@ MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
 
 
+
+# Free plan limits (per workspace).
+FREE_MAX_DOCUMENTS = 5
+FREE_MAX_QUESTIONS_PER_MONTH = 200
+
+
 # Login tokens are signed with AUTH_SECRET (without it, login and signup return 503).
 AUTH_SECRET = os.getenv("AUTH_SECRET")
 AUTH_TOKEN_TTL_SECONDS = 12 * 60 * 60
