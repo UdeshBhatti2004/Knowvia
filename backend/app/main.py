@@ -12,6 +12,7 @@ from app.api.routes.assistant import router as assistant_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.public import router as public_router
 from app.api.routes.sources import router as sources_router
+from app.api.routes.usage import router as usage_router
 from app.api.routes.widget import router as widget_router
 from app.core.config import CORS_ORIGINS
 from app.services.source_service import recover_interrupted_uploads
@@ -60,7 +61,8 @@ def create_app() -> FastAPI:
     app.include_router(ask_router, dependencies=authed)
     app.include_router(sources_router, dependencies=authed)
     app.include_router(assistant_router, dependencies=authed)
-    app.include_router(conversations_router, dependencies=authed)    
+    app.include_router(conversations_router, dependencies=authed)
+    app.include_router(usage_router, dependencies=authed)
 
     # Open or self-protected: login, public widget (widget key), widget routes
     # (per-route protection inside widget.py).
