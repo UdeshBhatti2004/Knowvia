@@ -37,6 +37,12 @@ export async function getMe() {
   return response.json()
 }
 
+export async function getUsage() {
+  const response = await apiFetch(`${API_URL}/usage`)
+  if (!response.ok) throw new Error('Could not load usage.')
+  return response.json()
+}
+
 export async function updateWorkspace(name) {
   const response = await apiFetch(`${API_URL}/auth/workspace`, {
     method: 'PUT',

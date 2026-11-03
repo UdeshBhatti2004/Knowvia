@@ -15,7 +15,7 @@ import {
   LogOut,
 } from 'lucide-react'
 
-import { getMe, logout } from '../../services/api'
+import { getMe, getUsage, logout } from '../../services/api'
 
 const navigationItems = [
   { label: 'Overview', icon: LayoutDashboard },
@@ -26,6 +26,33 @@ const navigationItems = [
   { label: 'Assistant Setup', icon: SlidersHorizontal },
   { label: 'Install', icon: Code },
 ]
+
+function UsageBar({ label, used, limit }) {
+  const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+  const barColor =
+    percent >= 100
+      ? 'bg-red-500'
+      : percent >= 80
+        ? 'bg-amber-500'
+        : 'bg-violet-500'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-zinc-400">{label}</span>
+        <span className="text-zinc-300">
+          {used} / {limit}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+        <div
+          className={`h-full rounded-full ${barColor}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  )
+}
 
 function Sidebar({
   isOpen,
@@ -41,6 +68,7 @@ function Sidebar({
   }
 
   const [me, setMe] = useState(null)
+  const [usage, setUsage] = useState(null)
 
   useEffect(() => {
     const load = () => getMe().then(setMe).catch(() => {})
@@ -48,6 +76,11 @@ function Sidebar({
     window.addEventListener('knowvia:account-updated', load)
     return () => window.removeEventListener('knowvia:account-updated', load)
   }, [])
+
+  // Refresh usage on every page change, so it updates after uploads and questions.
+  useEffect(() => {
+    getUsage().then(setUsage).catch(() => {})
+  }, [activePage])
 
   const workspaceName = me?.workspace_name || 'My Workspace'
   const accountLabel = me?.email || 'My Account'
@@ -86,7 +119,7 @@ function Sidebar({
       >
         {/* Header */}
         <div
-          className={`flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-3 ${
+          className={`flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-3${
             isCollapsed ? 'lg:justify-center lg:px-1' : ''
           }`}
         >
@@ -171,6 +204,26 @@ function Sidebar({
 
         {/* Footer */}
         <div className="mt-auto shrink-0 border-t border-white/[0.07] p-2.5">
+          {usage && (
+            <div
+              className={`mb-2 space-y-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2.5 ${hideWhenCollapsed}`}
+            >
+              <p className="text-[10px] font-medium tracking-widest text-zinc-600">
+                FREE PLAN USAGE
+              </p>
+              <UsageBar
+                label="Documents"
+                used={usage.documents}
+                limit={usage.documents_limit}
+              />
+              <UsageBar
+                label="Questions this month"
+                used={usage.questions}
+                limit={usage.questions_limit}
+              />
+            </div>
+          )}
+
           <button
             type="button"
             title={isCollapsed ? 'Settings' : undefined}
