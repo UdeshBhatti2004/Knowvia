@@ -53,6 +53,18 @@ AUTH_TOKEN_TTL_SECONDS = 12 * 60 * 60
 # Login brute-force limits per IP: (window in seconds, max attempts).
 LOGIN_RATE_LIMITS = [(60, 5), (3600, 20)]
 
+# Password reset. Forgot-password sends an email, so it is limited harder.
+FORGOT_PASSWORD_RATE_LIMITS = [(60, 3), (3600, 10)]
+PASSWORD_RESET_TTL_SECONDS = 60 * 60
+
+# Email (Resend). Without RESEND_API_KEY the reset link is printed to the
+# server console instead of emailed (local dev).
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+MAIL_FROM = os.getenv("MAIL_FROM") or "Knowvia <onboarding@resend.dev>"
+
+# Base URL used in emailed links.
+FRONTEND_URL = (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+
 # Number of reverse proxies in front of the app (0 = none, local dev).
 # Set TRUSTED_PROXY_HOPS=1 in production behind one proxy (Render, Railway, nginx).
 # Never set it above 0 if clients can reach the app directly, or the
