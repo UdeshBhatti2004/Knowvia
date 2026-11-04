@@ -41,9 +41,25 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf"}
 
 
 
-# Free plan limits (per workspace).
+# Free plan limits (per workspace). Kept as constants: PLANS["free"] uses them.
 FREE_MAX_DOCUMENTS = 5
 FREE_MAX_QUESTIONS_PER_MONTH = 200
+
+# Limits per plan. A workspace's plan is stored on its document.
+# Missing or unknown plan = DEFAULT_PLAN.
+DEFAULT_PLAN = "free"
+PLANS = {
+    "free": {
+        "name": "Free",
+        "max_documents": FREE_MAX_DOCUMENTS,
+        "max_questions_per_month": FREE_MAX_QUESTIONS_PER_MONTH,
+    },
+    "pro": {
+        "name": "Pro",
+        "max_documents": 50,
+        "max_questions_per_month": 5000,
+    },
+}
 
 
 # Login tokens are signed with AUTH_SECRET (without it, login and signup return 503).

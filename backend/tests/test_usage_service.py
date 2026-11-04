@@ -19,7 +19,7 @@ def test_count_documents_skips_failed():
 
 
 def test_check_can_upload_blocks_at_limit(monkeypatch):
-    monkeypatch.setattr(usage_service, "FREE_MAX_DOCUMENTS", 2)
+    monkeypatch.setitem(usage_service.PLANS["free"], "max_documents", 2)
     _docs("ws", ["Processed"])
     usage_service.check_can_upload("ws")  # below limit, no error
 
@@ -48,7 +48,9 @@ def test_question_count_only_this_month_and_own_workspace():
 
 
 def test_check_can_ask_blocks_at_limit(monkeypatch):
-    monkeypatch.setattr(usage_service, "FREE_MAX_QUESTIONS_PER_MONTH", 2)
+    monkeypatch.setitem(
+        usage_service.PLANS["free"], "max_questions_per_month", 2
+    )
     repo.log_conversation("ws", "q1", "a", "answered", [])
     usage_service.check_can_ask("ws")  # below limit, no error
 
@@ -67,12 +69,16 @@ def test_check_can_ask_fails_open(monkeypatch):
 
 
 def test_get_usage_shape(monkeypatch):
-    monkeypatch.setattr(usage_service, "FREE_MAX_DOCUMENTS", 5)
-    monkeypatch.setattr(usage_service, "FREE_MAX_QUESTIONS_PER_MONTH", 200)
+    monkeypatch.setitem(usage_service.PLANS["free"], "max_documents", 5)
+    monkeypatch.setitem(
+        usage_service.PLANS["free"], "max_questions_per_month", 200
+    )
     _docs("ws", ["Processed"])
     repo.log_conversation("ws", "q1", "a", "answered", [])
 
     assert usage_service.get_usage("ws") == {
+        "plan": "free",
+        "plan_name": "Free",
         "documents": 1,
         "documents_limit": 5,
         "questions": 1,

@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core import db as _db
+from app.core.config import DEFAULT_PLAN
 
 COLLECTION = "workspaces"
 
@@ -20,6 +21,7 @@ def create_workspace(owner_id: str, name: str) -> dict:
         "owner_id": owner_id,
         "name": name.strip(),
         "widget_key": secrets.token_urlsafe(24),
+        "plan": DEFAULT_PLAN,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _col().insert_one(doc)
@@ -53,3 +55,8 @@ def mark_tested(workspace_id: str) -> None:
         {"_id": workspace_id},
         {"$set": {"tested_at": datetime.now(timezone.utc).isoformat()}},
     )
+
+
+def set_plan(workspace_id: str, plan: str) -> None:
+    """Change a workspace's plan (used by billing later)."""
+    _col().update_one({"_id": workspace_id}, {"$set": {"plan": plan}})

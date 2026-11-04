@@ -31,7 +31,9 @@ def test_public_ask_blocked_at_monthly_limit(monkeypatch, widget_workspace):
     calls = []
     monkeypatch.setattr(public_route, "ask_question", _fake_ask(calls))
     monkeypatch.setattr(public_route, "ensure_loaded", lambda _w: None)
-    monkeypatch.setattr(usage_service, "FREE_MAX_QUESTIONS_PER_MONTH", 1)
+    monkeypatch.setitem(
+        usage_service.PLANS["free"], "max_questions_per_month", 1
+    )
     repo.log_conversation("default", "earlier", "a", "answered", [])
 
     res = client.post("/public/ask", json={"question": "hello?"})
@@ -45,7 +47,9 @@ def test_public_ask_allowed_below_limit(monkeypatch, widget_workspace):
     calls = []
     monkeypatch.setattr(public_route, "ask_question", _fake_ask(calls))
     monkeypatch.setattr(public_route, "ensure_loaded", lambda _w: None)
-    monkeypatch.setattr(usage_service, "FREE_MAX_QUESTIONS_PER_MONTH", 5)
+    monkeypatch.setitem(
+        usage_service.PLANS["free"], "max_questions_per_month", 5
+    )
 
     res = client.post("/public/ask", json={"question": "hello?"})
 
@@ -55,7 +59,7 @@ def test_public_ask_allowed_below_limit(monkeypatch, widget_workspace):
 
 def test_upload_blocked_at_document_limit(monkeypatch):
     monkeypatch.setattr(sources_route, "ensure_loaded", lambda _w: None)
-    monkeypatch.setattr(usage_service, "FREE_MAX_DOCUMENTS", 1)
+    monkeypatch.setitem(usage_service.PLANS["free"], "max_documents", 1)
     save_sources_metadata({"a.pdf": {"status": "Processed"}}, "default")
 
     res = client.post(
