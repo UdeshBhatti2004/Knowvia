@@ -133,3 +133,36 @@ export function logout() {
   clearToken()
   window.dispatchEvent(new Event('knowvia:logout'))
 }
+
+export async function forgotPassword(email) {
+  const response = await fetch(`${API_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+
+  if (response.status === 429) {
+    throw new Error('Too many attempts. Try again in a few minutes.')
+  }
+  if (response.status === 422) throw new Error('Enter a valid email.')
+  if (!response.ok) throw new Error('Something went wrong. Try again.')
+}
+
+export async function resetPassword(token, newPassword) {
+  const response = await fetch(`${API_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  })
+
+  if (response.status === 429) {
+    throw new Error('Too many attempts. Try again in a few minutes.')
+  }
+  if (response.status === 400) {
+    throw new Error('This reset link is invalid or has expired.')
+  }
+  if (response.status === 422) {
+    throw new Error('Use a password of at least 8 characters.')
+  }
+  if (!response.ok) throw new Error('Something went wrong. Try again.')
+}

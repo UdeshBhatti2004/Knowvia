@@ -5,9 +5,11 @@ import './index.css'
 import App from './App.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import PublicChatPage from './pages/PublicChatPage.jsx'
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import { getToken } from './services/api'
 
 const isPublicChat = window.location.pathname.startsWith('/chat')
+const isResetPassword = window.location.pathname.startsWith('/reset-password')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,5 +40,13 @@ function DashboardRoot() {
 }
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>{isPublicChat ? <PublicChatPage /> : <DashboardRoot />}</StrictMode>,
+    <StrictMode>
+    {isPublicChat ? (
+      <PublicChatPage />
+    ) : isResetPassword ? (
+      <ResetPasswordPage />
+    ) : (
+      <DashboardRoot />
+    )}
+  </StrictMode>,
 )
