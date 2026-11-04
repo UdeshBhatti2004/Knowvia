@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
+import { useUsage, useRefreshUsage } from '../hooks/useUsage'
 
 const uploadIdeas = [
   'Course details and fees',
@@ -26,6 +27,14 @@ function KnowledgeSourcesPage({ onNavigate }) {
   const [notice, setNotice] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+
+
+  const { data: usage } = useUsage()
+  const refreshUsage = useRefreshUsage()
+
+  // If usage fails to load we don't block anything; the backend still enforces.
+  const limitReached =
+    Boolean(usage) && usage.documents >= usage.documents_limit
 
   function clearMessages() {
     setError('')
@@ -84,6 +93,13 @@ function KnowledgeSourcesPage({ onNavigate }) {
           return
         }
 
+        // 403 is the free plan document limit. Refresh usage so the
+        // banner appears and the upload controls lock.
+        if (response.status === 403) {
+          setSelectedFile(null)
+          refreshUsage()
+        }
+
         throw new Error(message)
       }
 
@@ -94,6 +110,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
           'It is being processed in the background.'
       )
       setSelectedFile(null)
+      refreshUsage()
     } catch (err) {
       setError(
         err.message || 'Unable to connect to the backend. Please try again.'
@@ -116,7 +133,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
   }
 
   function openFilePicker() {
-    if (isUploading) return
+    if (isUploading || limitReached) return
 
     clearMessages()
     fileInputRef.current?.click()
@@ -126,7 +143,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
     event.preventDefault()
     setIsDragging(false)
 
-    if (!isUploading) {
+    if (!isUploading && !limitReached) {
       processFile(event.dataTransfer.files?.[0])
     }
   }
@@ -154,7 +171,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
         <button
           type="button"
           onClick={openFilePicker}
-          disabled={isUploading}
+          disabled={isUploading || limitReached}
           className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={14} />
@@ -172,7 +189,30 @@ function KnowledgeSourcesPage({ onNavigate }) {
       />
 
       {/* Messages */}
-      {error && (
+      {limitReached && (
+        <div
+          role="status"
+          className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-300"
+        >
+          <Info size={16} className="shrink-0" />
+          <p className="min-w-0 flex-1 basis-48 break-words">
+            Free plan limit reached: {usage.documents} of{' '}
+            {usage.documents_limit} documents. Delete a document to upload a
+            new one.
+          </p>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('Uploaded Documents')}
+              className="shrink-0 text-xs font-medium text-amber-200 underline-offset-2 transition hover:underline"
+            >
+              Manage documents
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && !limitReached && (
         <div
           role="alert"
           className="mt-5 flex items-start gap-2.5 rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-3 text-sm text-red-300"
@@ -262,13 +302,14 @@ function KnowledgeSourcesPage({ onNavigate }) {
           ) : (
             <div
               role="button"
-              tabIndex={0}
+              tabIndex={limitReached ? -1 : 0}
               aria-label="Select a PDF to upload"
+              aria-disabled={limitReached}
               onClick={openFilePicker}
               onKeyDown={handleZoneKeyDown}
               onDragOver={(event) => {
                 event.preventDefault()
-                setIsDragging(true)
+                if (!limitReached) setIsDragging(true)
               }}
               onDragLeave={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -276,10 +317,12 @@ function KnowledgeSourcesPage({ onNavigate }) {
                 }
               }}
               onDrop={handleDrop}
-              className={`flex cursor-pointer flex-col items-center rounded-xl border border-dashed px-5 py-12 text-center outline-none transition-colors focus-visible:border-violet-400 sm:py-16 ${
-                isDragging
-                  ? 'border-violet-400 bg-violet-500/10'
-                  : 'border-white/10 bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.03]'
+              className={`flex flex-col items-center rounded-xl border border-dashed px-5 py-12 text-center outline-none transition-colors focus-visible:border-violet-400 sm:py-16 ${
+                limitReached
+                  ? 'cursor-not-allowed border-white/10 bg-white/[0.015] opacity-50'
+                  : isDragging
+                    ? 'cursor-pointer border-violet-400 bg-violet-500/10'
+                    : 'cursor-pointer border-white/10 bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.03]'
               }`}
             >
               <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-violet-500/10">
@@ -287,11 +330,17 @@ function KnowledgeSourcesPage({ onNavigate }) {
               </div>
 
               <h2 className="text-sm font-medium text-zinc-200">
-                {isDragging ? 'Drop your PDF here' : 'Drag a PDF here'}
+                {limitReached
+                  ? 'Document limit reached'
+                  : isDragging
+                    ? 'Drop your PDF here'
+                    : 'Drag a PDF here'}
               </h2>
 
               <p className="mt-1.5 text-sm text-zinc-500">
-                or click to choose a file from your computer
+                {limitReached
+                  ? 'Delete a document to upload a new one'
+                  : 'or click to choose a file from your computer'}
               </p>
 
               <p className="mt-4 text-xs text-zinc-600">

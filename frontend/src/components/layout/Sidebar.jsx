@@ -15,7 +15,8 @@ import {
   LogOut,
 } from 'lucide-react'
 
-import { getMe, getUsage, logout } from '../../services/api'
+import { getMe, logout } from '../../services/api'
+import { useUsage } from '../../hooks/useUsage'
 
 const navigationItems = [
   { label: 'Overview', icon: LayoutDashboard },
@@ -68,7 +69,7 @@ function Sidebar({
   }
 
   const [me, setMe] = useState(null)
-  const [usage, setUsage] = useState(null)
+  const { data: usage } = useUsage()
 
   useEffect(() => {
     const load = () => getMe().then(setMe).catch(() => {})
@@ -76,11 +77,6 @@ function Sidebar({
     window.addEventListener('knowvia:account-updated', load)
     return () => window.removeEventListener('knowvia:account-updated', load)
   }, [])
-
-  // Refresh usage on every page change, so it updates after uploads and questions.
-  useEffect(() => {
-    getUsage().then(setUsage).catch(() => {})
-  }, [activePage])
 
   const workspaceName = me?.workspace_name || 'My Workspace'
   const accountLabel = me?.email || 'My Account'

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
+import { useRefreshUsage } from '../hooks/useUsage'
 
 // How often (in milliseconds) to re-check the list while a file is processing.
 const POLL_INTERVAL_MS = 3000
@@ -89,6 +90,7 @@ function UploadedDocumentsPage({ onNavigate }) {
   const [confirmingFilename, setConfirmingFilename] = useState(null)
   const [deletingFilename, setDeletingFilename] = useState(null)
   const [actionError, setActionError] = useState('')
+  const refreshUsage = useRefreshUsage()
 
   // showSpinner = true: the user opened the page or pressed Refresh, so we
   // show the spinner and any error.
@@ -166,6 +168,7 @@ function UploadedDocumentsPage({ onNavigate }) {
         current.filter((source) => source.filename !== filename)
       )
       setConfirmingFilename(null)
+      refreshUsage()
     } catch (err) {
       setActionError(err.message || 'Unable to delete the document.')
     } finally {
