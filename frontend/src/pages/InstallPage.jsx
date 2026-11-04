@@ -10,55 +10,58 @@ import {
   Link2,
   ExternalLink,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { API_URL, apiFetch } from '../services/api'
+import {
+  WIDGET_DOMAINS_KEY,
+  useWidget,
+  useWidgetDomains,
+} from '../hooks/useWidget'
 
 function InstallPage() {
-  const [publicKey, setPublicKey] = useState('')
-  const [loading, setLoading] = useState(true)
+
+  const queryClient = useQueryClient()
+  const widgetQuery = useWidget()
+  const domainsQuery = useWidgetDomains()
+
+  const publicKey = widgetQuery.data?.public_key || ''
+  const loading = widgetQuery.isLoading
+  const domainsLoading = domainsQuery.isLoading
+
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
-  const [domainsText, setDomainsText] = useState('')
-  const [savedDomainsText, setSavedDomainsText] = useState('')
-  const [domainsLoading, setDomainsLoading] = useState(true)
+  // Start from the cached domains so there is no empty-box flash on revisit.
+  const cachedDomains = domainsQuery.data
+    ? domainsQuery.data.domains.join('\n')
+    : ''
+  const [domainsText, setDomainsText] = useState(cachedDomains)
+  const [savedDomainsText, setSavedDomainsText] = useState(cachedDomains)
   const [domainsSaving, setDomainsSaving] = useState(false)
   const [domainsError, setDomainsError] = useState('')
   const [domainsSaved, setDomainsSaved] = useState(false)
 
+  // Fill the box when domains load or change in the cache.
   useEffect(() => {
-    async function load() {
-      try {
-        const response = await apiFetch(`${API_URL}/widget`)
-        if (!response.ok) throw new Error()
-        const data = await response.json()
-        setPublicKey(data.public_key)
-      } catch {
-        setError('Could not load your widget key. Is the backend running?')
-      } finally {
-        setLoading(false)
-      }
+    if (!domainsQuery.data) return
+    const text = domainsQuery.data.domains.join('\n')
+    setDomainsText(text)
+    setSavedDomainsText(text)
+  }, [domainsQuery.data])
+
+  // Show load errors only when there is nothing cached.
+  useEffect(() => {
+    if (widgetQuery.isError && !widgetQuery.data) {
+      setError('Could not load your widget key. Is the backend running?')
     }
-    load()
-  }, [])
+  }, [widgetQuery.isError, widgetQuery.data])
 
   useEffect(() => {
-    async function loadDomains() {
-      try {
-        const response = await apiFetch(`${API_URL}/widget/domains`)
-        if (!response.ok) throw new Error()
-        const data = await response.json()
-        const text = data.domains.join('\n')
-        setDomainsText(text)
-        setSavedDomainsText(text)
-      } catch {
-        setDomainsError('Could not load allowed domains.')
-      } finally {
-        setDomainsLoading(false)
-      }
+    if (domainsQuery.isError && !domainsQuery.data) {
+      setDomainsError('Could not load allowed domains.')
     }
-    loadDomains()
-  }, [])
+  }, [domainsQuery.isError, domainsQuery.data])
 
   const snippet = `<script src="${window.location.origin}/widget.js" data-key="${publicKey}"></script>`
   const shareLink = `${window.location.origin}/chat?key=${encodeURIComponent(publicKey)}`
@@ -105,6 +108,7 @@ function InstallPage() {
 
       const data = await response.json()
       const text = data.domains.join('\n')
+      queryClient.setQueryData(WIDGET_DOMAINS_KEY, data)
       setDomainsText(text)
       setSavedDomainsText(text)
       setDomainsSaved(true)

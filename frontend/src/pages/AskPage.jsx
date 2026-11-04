@@ -3,6 +3,7 @@ import { Bot, RotateCcw, User } from 'lucide-react'
 import QuestionInput from '../components/chat/QuestionInput'
 import AnswerCard from '../components/answers/AnswerCard'
 import { API_URL, apiFetch } from '../services/api'
+import { useAssistant } from '../hooks/useAssistant'
 
 // Used until the saved settings load, and if loading them fails.
 const DEFAULT_NAME = 'Knowvia Assistant'
@@ -28,36 +29,14 @@ function AskPage({ initialQuestion = '', onInitialQuestionUsed }) {
   const [question, setQuestion] = useState(initialQuestion)
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
-  const [assistant, setAssistant] = useState({
-    name: DEFAULT_NAME,
-    welcome: DEFAULT_WELCOME,
-  })
+  const { data: assistantData } = useAssistant()
+  const assistant = {
+    name: assistantData?.name || DEFAULT_NAME,
+    welcome: assistantData?.welcome_message || DEFAULT_WELCOME,
+  }
   const bottomRef = useRef(null)
 
-  // Load the saved assistant name and welcome message once.
-  useEffect(() => {
-    let cancelled = false
 
-    async function loadAssistant() {
-      try {
-        const response = await apiFetch(`${API_URL}/assistant`)
-        if (!response.ok) return
-        const data = await response.json()
-        if (cancelled) return
-        setAssistant({
-          name: data.name || DEFAULT_NAME,
-          welcome: data.welcome_message || DEFAULT_WELCOME,
-        })
-      } catch {
-        // Keep the defaults. The chat must work even if settings fail.
-      }
-    }
-
-    loadAssistant()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // Keep the newest message in view.
   useEffect(() => {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Building2, User, Save, RotateCcw, KeyRound } from 'lucide-react'
 
-import { changePassword, getMe, updateWorkspace } from '../services/api'
+import { changePassword, updateWorkspace } from '../services/api'
+import { useMe, useRefreshMe } from '../hooks/useMe'
 import PasswordInput from '../components/PasswordInput'
 
 const inputClass =
@@ -53,9 +54,9 @@ function Hint({ show, children }) {
 }
 
 function SettingsPage() {
-  const [me, setMe] = useState(null)
-  const [name, setName] = useState('')
-  const [loading, setLoading] = useState(true)
+  const { data: me, isLoading: loading, isError } = useMe()
+  const refreshMe = useRefreshMe()
+  const [name, setName] = useState(me?.workspace_name || '')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null) // { type: 'ok' | 'error', text }
 
@@ -65,15 +66,17 @@ function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordStatus, setPasswordStatus] = useState(null)
 
+  // Fill the field when the account loads (cached or fresh).
+  const loadedName = me?.workspace_name
   useEffect(() => {
-    getMe()
-      .then((data) => {
-        setMe(data)
-        setName(data.workspace_name)
-      })
-      .catch(() => setStatus({ type: 'error', text: 'Could not load account.' }))
-      .finally(() => setLoading(false))
-  }, [])
+    if (loadedName !== undefined) setName(loadedName)
+  }, [loadedName])
+
+  const shownStatus =
+    status ||
+    (isError && !me
+      ? { type: 'error', text: 'Could not load account.' }
+      : null)
 
   const unchanged = name.trim() === (me?.workspace_name || '')
 
@@ -90,8 +93,8 @@ function SettingsPage() {
     setStatus(null)
     try {
       const data = await updateWorkspace(name.trim())
-      setMe((prev) => ({ ...prev, workspace_name: data.workspace_name }))
       setName(data.workspace_name)
+      refreshMe()
       setStatus({ type: 'ok', text: 'Saved.' })
     } catch (err) {
       setStatus({ type: 'error', text: err.message })
@@ -200,7 +203,7 @@ function SettingsPage() {
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
-          <StatusText status={status} />
+          <StatusText status={shownStatus} />
         </div>
       </form>
 

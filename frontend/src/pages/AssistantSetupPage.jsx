@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Bot,
   Check,
@@ -8,6 +9,7 @@ import {
   User,
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
+import { ASSISTANT_KEY, useAssistant } from '../hooks/useAssistant'
 
 // Placeholders and preview fallbacks only. The real values come from the backend.
 const DEFAULTS = {
@@ -76,51 +78,31 @@ function Field({ id, label, hint, count, limit, children }) {
 }
 
 function AssistantSetupPage() {
-  const [values, setValues] = useState(EMPTY)
-  const [saved, setSaved] = useState(EMPTY)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
+  const queryClient = useQueryClient()
+  const { data, isLoading: loading, error, refetch } = useAssistant()
+
+  // Start from the cached copy so there is no empty-form flash on revisit.
+  const [values, setValues] = useState(() => (data ? fromApi(data) : EMPTY))
+  const [saved, setSaved] = useState(() => (data ? fromApi(data) : EMPTY))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [justSaved, setJustSaved] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
 
+  // Only an error when there is nothing cached to show.
+  const loadError =
+    error && !data
+      ? error instanceof TypeError
+        ? 'Could not reach the server.'
+        : error.message
+      : ''
+
+  // Fill the form when settings load or change in the cache.
   useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setLoadError('')
-
-      try {
-        const response = await apiFetch(`${API_URL}/assistant`)
-        if (!response.ok) {
-          throw new Error(
-            await readError(response, 'Could not load assistant settings.'),
-          )
-        }
-        const loaded = fromApi(await response.json())
-        if (cancelled) return
-        setValues(loaded)
-        setSaved(loaded)
-      } catch (error) {
-        if (!cancelled) {
-          setLoadError(
-            error instanceof TypeError
-              ? 'Could not reach the server.'
-              : error.message,
-          )
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [reloadKey])
+    if (!data) return
+    const loaded = fromApi(data)
+    setValues(loaded)
+    setSaved(loaded)
+  }, [data])
 
   const isDirty =
     values.name !== saved.name ||
@@ -158,10 +140,12 @@ function AssistantSetupPage() {
           await readError(response, 'Could not save. Please try again.'),
         )
       }
-      // Use the server's copy (it trims whitespace).
-      const next = fromApi(await response.json())
+      const raw = await response.json()
+      const next = fromApi(raw)
       setValues(next)
       setSaved(next)
+      // Overview and Test Assistant read the same cache.
+      queryClient.setQueryData(ASSISTANT_KEY, raw)
       setJustSaved(true)
     } catch (error) {
       setSaveError(
@@ -241,7 +225,7 @@ function AssistantSetupPage() {
           <span>{loadError}</span>
           <button
             type="button"
-            onClick={() => setReloadKey((key) => key + 1)}
+            onClick={() => refetch()}
             className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-400/10"
           >
             Try again

@@ -1,5 +1,4 @@
-﻿import { useEffect, useState } from 'react'
-import {
+﻿import {
   AlertCircle,
   ArrowRight,
   Bot,
@@ -11,8 +10,8 @@ import {
   MessageSquare,
   Sparkles,
 } from 'lucide-react'
-import { API_URL, apiFetch } from '../services/api'
 import { useSources } from '../hooks/useSources'
+import { useAssistant, useAssistantStatus } from '../hooks/useAssistant'
 
 
 
@@ -97,51 +96,22 @@ function OverviewPage({ onNavigate, onAskSample }) {  const {
   const error = queryError
     ? queryError.message || 'Unable to connect to the backend.'
     : ''
-  const [assistantConfigured, setAssistantConfigured] = useState(false)
-  const [assistantChecked, setAssistantChecked] = useState(false)
-  const [testedAt, setTestedAt] = useState(null)
-
+  const assistantQuery = useAssistant()
+  const statusQuery = useAssistantStatus()
 
   // Configured = the saved settings differ from the backend defaults.
+  const assistant = assistantQuery.data
+  const assistantConfigured =
+    Boolean(assistant) &&
+    (assistant.name !== BACKEND_DEFAULTS.name ||
+      assistant.welcome_message !== BACKEND_DEFAULTS.welcome_message ||
+      assistant.fallback_message !== BACKEND_DEFAULTS.fallback_message)
+
   // Tested = the owner has run a real question from the dashboard.
-  useEffect(() => {
-    let cancelled = false
+  const testedAt = statusQuery.data?.tested_at || null
 
-    async function checkAssistant() {
-      try {
-        const response = await apiFetch(`${API_URL}/assistant`)
-        if (response.ok) {
-          const data = await response.json()
-          if (!cancelled) {
-            setAssistantConfigured(
-              data.name !== BACKEND_DEFAULTS.name ||
-                data.welcome_message !== BACKEND_DEFAULTS.welcome_message ||
-                data.fallback_message !== BACKEND_DEFAULTS.fallback_message,
-            )
-          }
-        }
-      } catch {
-        // Leave it as "not configured". Overview still works.
-      }
-
-      try {
-        const response = await apiFetch(`${API_URL}/assistant/status`)
-        if (response.ok) {
-          const data = await response.json()
-          if (!cancelled) setTestedAt(data.tested_at || null)
-        }
-      } catch {
-        // Leave it as "not tested".
-      }
-
-      if (!cancelled) setAssistantChecked(true)
-    }
-
-    checkAssistant()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Only "loading" while there is no cached data yet.
+  const assistantChecked = !assistantQuery.isLoading && !statusQuery.isLoading
 
   const processingCount = sources.filter((s) => s.status === 'Processing').length
   const failedCount = sources.filter((s) => s.status === 'Failed').length

@@ -1,5 +1,4 @@
-﻿import { useEffect, useState } from 'react'
-import {
+﻿import {
   BrainCircuit,
   LayoutDashboard,
   Files,
@@ -15,7 +14,8 @@ import {
   LogOut,
 } from 'lucide-react'
 
-import { getMe, logout } from '../../services/api'
+import { logout } from '../../services/api'
+import { useMe } from '../../hooks/useMe'
 import { useUsage } from '../../hooks/useUsage'
 
 const navigationItems = [
@@ -68,15 +68,8 @@ function Sidebar({
     onClose?.()
   }
 
-  const [me, setMe] = useState(null)
+  const { data: me } = useMe()
   const { data: usage } = useUsage()
-
-  useEffect(() => {
-    const load = () => getMe().then(setMe).catch(() => {})
-    load()
-    window.addEventListener('knowvia:account-updated', load)
-    return () => window.removeEventListener('knowvia:account-updated', load)
-  }, [])
 
   const workspaceName = me?.workspace_name || 'My Workspace'
   const accountLabel = me?.email || 'My Account'
