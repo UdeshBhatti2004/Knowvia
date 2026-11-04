@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+﻿import { useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,9 +12,7 @@ import {
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
 import { useRefreshUsage } from '../hooks/useUsage'
-
-// How often (in milliseconds) to re-check the list while a file is processing.
-const POLL_INTERVAL_MS = 3000
+import { useSources, useRefreshSources } from '../hooks/useSources'
 
 const FILTERS = ['All', 'Ready', 'Processing', 'Failed']
 
@@ -82,50 +80,25 @@ function StatusBadge({ status }) {
 }
 
 function UploadedDocumentsPage({ onNavigate }) {
-  const [sources, setSources] = useState([])
+  // Shared cache. Polls by itself while a file is processing.
+  const {
+    data: sources = [],
+    isLoading: loading,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useSources()
+  const error = queryError
+    ? queryError.message || 'Unable to connect to the backend.'
+    : ''
+
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('All')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [confirmingFilename, setConfirmingFilename] = useState(null)
   const [deletingFilename, setDeletingFilename] = useState(null)
   const [actionError, setActionError] = useState('')
   const refreshUsage = useRefreshUsage()
-
-  // showSpinner = true: the user opened the page or pressed Refresh, so we
-  // show the spinner and any error.
-  // showSpinner = false: the automatic check every 3 seconds. It stays
-  // silent so the list does not flicker.
-  const fetchSources = useCallback(async (showSpinner = true) => {
-    if (showSpinner) {
-      setLoading(true)
-      setError('')
-    }
-
-    try {
-      const response = await apiFetch(`${API_URL}/sources`)
-      const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Unable to load documents.')
-      }
-
-      setSources(Array.isArray(data.sources) ? data.sources : [])
-    } catch (err) {
-      if (showSpinner) {
-        setError(err.message || 'Unable to connect to the backend.')
-      }
-    } finally {
-      if (showSpinner) {
-        setLoading(false)
-      }
-    }
-  }, [])
-
-  // Load the list once when the page opens.
-  useEffect(() => {
-    fetchSources()
-  }, [fetchSources])
+  const refreshSources = useRefreshSources()
 
   const counts = {
     All: sources.length,
@@ -134,20 +107,6 @@ function UploadedDocumentsPage({ onNavigate }) {
       .length,
     Failed: sources.filter((s) => getGroup(s.status) === 'Failed').length,
   }
-
-  const hasProcessing = counts.Processing > 0
-
-  // While a file is processing, re-check every 3 seconds. When none is,
-  // this effect re-runs without a timer, so polling stops by itself.
-  useEffect(() => {
-    if (!hasProcessing) return undefined
-
-    const timer = setInterval(() => {
-      fetchSources(false)
-    }, POLL_INTERVAL_MS)
-
-    return () => clearInterval(timer)
-  }, [hasProcessing, fetchSources])
 
   const deleteSource = async (filename) => {
     setDeletingFilename(filename)
@@ -164,10 +123,8 @@ function UploadedDocumentsPage({ onNavigate }) {
         throw new Error(data.detail || 'Unable to delete the document.')
       }
 
-      setSources((current) =>
-        current.filter((source) => source.filename !== filename)
-      )
       setConfirmingFilename(null)
+      refreshSources()
       refreshUsage()
     } catch (err) {
       setActionError(err.message || 'Unable to delete the document.')
@@ -214,11 +171,11 @@ function UploadedDocumentsPage({ onNavigate }) {
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => fetchSources()}
-            disabled={loading}
+            onClick={() => refetch()}
+            disabled={isFetching}
             className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/[0.05] disabled:opacity-50"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
             Refresh
           </button>
 
@@ -311,12 +268,12 @@ function UploadedDocumentsPage({ onNavigate }) {
 
       {/* Document list */}
       <div className="mt-3">
-        {error ? (
+        {error && sources.length === 0 ? (
           <div className="rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-4 text-sm text-red-300">
             {error}
             <button
               type="button"
-              onClick={() => fetchSources()}
+              onClick={() => refetch()}
               className="ml-3 text-violet-300 hover:text-violet-200"
             >
               Retry

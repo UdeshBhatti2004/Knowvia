@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
 import { useUsage, useRefreshUsage } from '../hooks/useUsage'
+import { useRefreshSources } from '../hooks/useSources'
 
 const uploadIdeas = [
   'Course details and fees',
@@ -31,6 +32,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
 
   const { data: usage } = useUsage()
   const refreshUsage = useRefreshUsage()
+  const refreshSources = useRefreshSources()
 
   // If usage fails to load we don't block anything; the backend still enforces.
   const limitReached =
@@ -111,6 +113,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
       )
       setSelectedFile(null)
       refreshUsage()
+      refreshSources()
     } catch (err) {
       setError(
         err.message || 'Unable to connect to the backend. Please try again.'

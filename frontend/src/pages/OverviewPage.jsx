@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowRight,
@@ -12,9 +12,9 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { API_URL, apiFetch } from '../services/api'
+import { useSources } from '../hooks/useSources'
 
-// How often (in milliseconds) to re-check while a file is processing.
-const POLL_INTERVAL_MS = 3000
+
 
 
 // Must match the defaults in backend/app/schemas/assistant.py.
@@ -88,46 +88,19 @@ function StatusBadge({ status }) {
   )
 }
 
-function OverviewPage({ onNavigate, onAskSample }) {
-  const [sources, setSources] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+function OverviewPage({ onNavigate, onAskSample }) {  const {
+    data: sources = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useSources()
+  const error = queryError
+    ? queryError.message || 'Unable to connect to the backend.'
+    : ''
   const [assistantConfigured, setAssistantConfigured] = useState(false)
   const [assistantChecked, setAssistantChecked] = useState(false)
   const [testedAt, setTestedAt] = useState(null)
 
-  // showSpinner = true: first load or Retry (shows loading and errors).
-  // showSpinner = false: the automatic check while a file is processing.
-  // It stays silent so the page does not flicker.
-  const fetchSources = useCallback(async (showSpinner = true) => {
-    if (showSpinner) {
-      setLoading(true)
-      setError('')
-    }
-
-    try {
-      const response = await apiFetch(`${API_URL}/sources`)
-      const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Unable to load your documents.')
-      }
-
-      setSources(Array.isArray(data.sources) ? data.sources : [])
-    } catch (err) {
-      if (showSpinner) {
-        setError(err.message || 'Unable to connect to the backend.')
-      }
-    } finally {
-      if (showSpinner) {
-        setLoading(false)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchSources()
-  }, [fetchSources])
 
   // Configured = the saved settings differ from the backend defaults.
   // Tested = the owner has run a real question from the dashboard.
@@ -173,19 +146,7 @@ function OverviewPage({ onNavigate, onAskSample }) {
   const processingCount = sources.filter((s) => s.status === 'Processing').length
   const failedCount = sources.filter((s) => s.status === 'Failed').length
   const processedCount = sources.length - processingCount - failedCount
-  const hasProcessing = processingCount > 0
 
-  // Poll while something is processing. When nothing is, the effect re-runs
-  // without starting a timer, so polling stops by itself.
-  useEffect(() => {
-    if (!hasProcessing) return undefined
-
-    const timer = setInterval(() => {
-      fetchSources(false)
-    }, POLL_INTERVAL_MS)
-
-    return () => clearInterval(timer)
-  }, [hasProcessing, fetchSources])
 
   const tested = Boolean(testedAt)
   const lastTest = testedAt ? timeAgo(testedAt) : null
@@ -298,7 +259,7 @@ function OverviewPage({ onNavigate, onAskSample }) {
           {error}
           <button
             type="button"
-            onClick={() => fetchSources()}
+            onClick={() => refetch()}
             className="ml-3 text-violet-400 hover:text-violet-300"
           >
             Retry
