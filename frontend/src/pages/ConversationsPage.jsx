@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,7 +8,8 @@ import {
   RefreshCw,
   SearchX,
 } from 'lucide-react'
-import { API_URL, apiFetch } from '../services/api'
+import { useConversations } from '../hooks/useConversations'
+import { useRefreshUsage } from '../hooks/useUsage'
 
 const FILTERS = [
   { value: 'not_found', label: 'Not found' },
@@ -89,56 +90,31 @@ function emptyCopy(filter) {
   }
   return {
     title: 'No customer questions yet',
-    body: 'Questions from your share link and website widget will show up here. Questions you ask in Test Assistant are not recorded.',
+    body: 'Questions from your share link and website widget will show up here. Questions you ask in TestAssistant are not recorded.',
   }
 }
 
 function ConversationsPage({ onNavigate }) {
   const [filter, setFilter] = useState('not_found')
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [openKey, setOpenKey] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
 
-  useEffect(() => {
-    let cancelled = false
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useConversations(filter)
+  const refreshUsage = useRefreshUsage()
 
-    async function load() {
-      setLoading(true)
-      setError('')
+  const items = data ?? []
+  const error = queryError ? queryError.message : ''
 
-      try {
-        const query = new URLSearchParams({ limit: '100' })
-        if (filter) query.set('outcome', filter)
-
-        const response = await apiFetch(
-          `${API_URL}/conversations/grouped?${query}`,
-        )
-        const data = await response.json().catch(() => ({}))
-
-        if (!response.ok) {
-          throw new Error(data.detail || 'Unable to load conversations.')
-        }
-        if (!cancelled) setItems(Array.isArray(data.items) ? data.items : [])
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof TypeError
-              ? 'Could not reach the server.'
-              : err.message,
-          )
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [filter, reloadKey])
+  function handleRefresh() {
+    refetch()
+    // Customer questions count toward the monthly limit.
+    refreshUsage()
+  }
 
   const showEmpty = !loading && !error && items.length === 0
   const empty = emptyCopy(filter)
@@ -158,11 +134,11 @@ function ConversationsPage({ onNavigate }) {
 
         <button
           type="button"
-          onClick={() => setReloadKey((key) => key + 1)}
-          disabled={loading}
+          onClick={handleRefresh}
+          disabled={isFetching}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
           Refresh
         </button>
       </header>
@@ -195,7 +171,7 @@ function ConversationsPage({ onNavigate }) {
           <span>{error}</span>
           <button
             type="button"
-            onClick={() => setReloadKey((key) => key + 1)}
+            onClick={() => refetch()}
             className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-400/10"
           >
             Try again
@@ -203,7 +179,7 @@ function ConversationsPage({ onNavigate }) {
         </div>
       )}
 
-      {loading && items.length === 0 && !error && (
+      {loading && !error && (
         <div className="mt-8 flex items-center gap-2 text-sm text-zinc-400">
           <Loader2 size={15} className="animate-spin" />
           Loading conversations...
@@ -256,7 +232,8 @@ function ConversationsPage({ onNavigate }) {
                       <OutcomeBadge outcome={item.outcome} />
                       {item.count > 1 && (
                         <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-zinc-300">
-                          ×{item.count}
+                          {'\u00d7'}
+                          {item.count}
                         </span>
                       )}
                       <span className="text-xs text-zinc-500">
