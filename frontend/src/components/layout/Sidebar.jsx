@@ -159,7 +159,9 @@ function Sidebar({
 
             <div className={`min-w-0 flex-1 text-left ${hideWhenCollapsed}`}>
               <p className="truncate text-xs font-medium">{workspaceName}</p>
-              <p className="mt-0.5 text-[11px] text-zinc-500">Free plan</p>
+              <p className="mt-0.5 text-[11px] text-zinc-500">
+                {usage?.plan_name || 'Free'} plan
+              </p>
             </div>
           </div>
         </div>
@@ -198,7 +200,7 @@ function Sidebar({
               className={`mb-2 space-y-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2.5 ${hideWhenCollapsed}`}
             >
               <p className="text-[10px] font-medium tracking-widest text-zinc-600">
-                FREE PLAN USAGE
+                {(usage.plan_name || 'Free').toUpperCase()} PLAN USAGE
               </p>
               <UsageBar
                 label="Documents"
