@@ -27,6 +27,14 @@ class BillingError(Exception):
     pass
 
 
+class AlreadySubscribed(Exception):
+    pass
+
+
+class NoSubscription(Exception):
+    pass
+
+
 def _razorpay_plan_ids() -> dict:
     return {
         "starter": config.RAZORPAY_PLAN_ID_STARTER,
@@ -52,6 +60,10 @@ def create_subscription(workspace_id: str, plan_key: str) -> dict:
         or not razorpay_plan_id
     ):
         raise BillingNotConfigured()
+
+    workspace = workspace_repository.get_by_id(workspace_id)
+    if workspace and workspace.get("plan", config.DEFAULT_PLAN) != config.DEFAULT_PLAN:
+        raise AlreadySubscribed()
 
     try:
         response = httpx.post(
@@ -83,6 +95,36 @@ def create_subscription(workspace_id: str, plan_key: str) -> dict:
         "subscription_id": subscription_id,
         "key_id": config.RAZORPAY_KEY_ID,
     }
+
+
+def cancel_subscription(workspace_id: str) -> None:
+    """Cancel the workspace's Razorpay subscription and drop it to the free plan."""
+    if not config.RAZORPAY_KEY_ID or not config.RAZORPAY_KEY_SECRET:
+        raise BillingNotConfigured()
+
+    workspace = workspace_repository.get_by_id(workspace_id)
+    subscription_id = (workspace or {}).get("razorpay_subscription_id")
+    plan = (workspace or {}).get("plan", config.DEFAULT_PLAN)
+
+    if not subscription_id or plan == config.DEFAULT_PLAN:
+        raise NoSubscription()
+
+    try:
+        response = httpx.post(
+            f"{RAZORPAY_API}/subscriptions/{subscription_id}/cancel",
+            auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET),
+            json={"cancel_at_cycle_end": 0},
+            timeout=15,
+        )
+    except httpx.HTTPError as exc:
+        print(f"Razorpay cancel request failed: {exc}")
+        raise BillingError() from exc
+
+    if response.status_code >= 400:
+        print(f"Razorpay cancel error {response.status_code}: {response.text}")
+        raise BillingError()
+
+    workspace_repository.set_plan(workspace_id, config.DEFAULT_PLAN)
 
 
 def verify_signature(body: bytes, signature: str | None) -> bool:

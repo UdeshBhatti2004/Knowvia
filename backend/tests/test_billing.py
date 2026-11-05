@@ -250,3 +250,80 @@ def test_subscribe_returns_502_when_network_fails(monkeypatch):
     login_as(ws_id)
     res = client.post("/billing/subscribe", json={"plan": "pro"})
     assert res.status_code == 502
+
+
+
+# ---- double subscribe and cancel ----
+
+
+def test_subscribe_blocked_when_already_on_paid_plan(monkeypatch):
+    called = {"n": 0}
+
+    def fake_post(url, **kwargs):
+        called["n"] += 1
+        return FakeResponse(200, {"id": "sub_new"})
+
+    monkeypatch.setattr(billing_service.httpx, "post", fake_post)
+
+    ws_id = make_workspace(plan="starter", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/subscribe", json={"plan": "pro"})
+
+    assert res.status_code == 409
+    assert called["n"] == 0
+    assert plan_of(ws_id) == "starter"
+
+
+def test_cancel_success_calls_razorpay_and_sets_free(monkeypatch):
+    sent = {}
+
+    def fake_post(url, **kwargs):
+        sent["url"] = url
+        sent["json"] = kwargs["json"]
+        return FakeResponse(200, {"id": "sub_1", "status": "cancelled"})
+
+    monkeypatch.setattr(billing_service.httpx, "post", fake_post)
+
+    ws_id = make_workspace(plan="pro", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+
+    assert res.status_code == 200
+    assert sent["url"].endswith("/subscriptions/sub_1/cancel")
+    assert sent["json"] == {"cancel_at_cycle_end": 0}
+    assert plan_of(ws_id) == "free"
+
+
+def test_cancel_without_subscription_returns_404():
+    ws_id = make_workspace(subscription_id=None)
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+    assert res.status_code == 404
+
+
+def test_cancel_on_free_plan_returns_404():
+    ws_id = make_workspace(plan="free", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+    assert res.status_code == 404
+
+
+def test_cancel_returns_503_when_not_configured(monkeypatch):
+    monkeypatch.setattr(config, "RAZORPAY_KEY_SECRET", None)
+    ws_id = make_workspace(plan="pro", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+    assert res.status_code == 503
+
+
+def test_cancel_razorpay_error_keeps_plan(monkeypatch):
+    monkeypatch.setattr(
+        billing_service.httpx,
+        "post",
+        lambda url, **kw: FakeResponse(400, {"error": "bad"}),
+    )
+    ws_id = make_workspace(plan="pro", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+    assert res.status_code == 502
+    assert plan_of(ws_id) == "pro"

@@ -23,11 +23,33 @@ def subscribe_route(
         return billing_service.create_subscription(workspace_id, payload.plan)
     except billing_service.BillingNotConfigured:
         raise HTTPException(status_code=503, detail="Billing is not configured.")
+    except billing_service.AlreadySubscribed:
+        raise HTTPException(
+            status_code=409,
+            detail="You already have a paid plan. Cancel it first.",
+        )
     except billing_service.BillingError:
         raise HTTPException(
             status_code=502,
             detail="Could not start the subscription. Try again.",
         )
+
+
+@router.post("/cancel")
+def cancel_route(workspace_id: str = Depends(require_user)):
+    try:
+        billing_service.cancel_subscription(workspace_id)
+    except billing_service.BillingNotConfigured:
+        raise HTTPException(status_code=503, detail="Billing is not configured.")
+    except billing_service.NoSubscription:
+        raise HTTPException(status_code=404, detail="No active subscription.")
+    except billing_service.BillingError:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not cancel the subscription. Try again.",
+        )
+
+    return {"ok": True}
 
 
 @router.post("/webhook")
