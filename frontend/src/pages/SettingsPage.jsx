@@ -8,9 +8,13 @@ import {
   CreditCard,
 } from 'lucide-react'
 
-import { changePassword, updateWorkspace } from '../services/api'
+import {
+  cancelSubscription,
+  changePassword,
+  updateWorkspace,
+} from '../services/api'
 import { useMe, useRefreshMe } from '../hooks/useMe'
-import { useUsage } from '../hooks/useUsage'
+import { useUsage, useRefreshUsage } from '../hooks/useUsage'
 import { useCheckout } from '../hooks/useCheckout'
 import PasswordInput from '../components/PasswordInput'
 
@@ -73,8 +77,13 @@ function SettingsPage() {
   const { data: me, isLoading: loading, isError } = useMe()
   const refreshMe = useRefreshMe()
   const { data: usage } = useUsage()
+  const refreshUsage = useRefreshUsage()
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelStatus, setCancelStatus] = useState(null)
   const {
     startCheckout,
+    reset: resetCheckout,
     status: checkoutStatus,
     error: checkoutError,
     busy: checkoutBusy,
@@ -157,8 +166,28 @@ function SettingsPage() {
 
   const clearPasswordStatus = () => setPasswordStatus(null)
 
+  const handleCancel = async () => {
+    setCancelling(true)
+    setCancelStatus(null)
+    try {
+      await cancelSubscription()
+      resetCheckout()
+      refreshUsage()
+      setConfirmingCancel(false)
+      setCancelStatus({
+        type: 'ok',
+        text: 'Plan cancelled. You are on the Free plan.',
+      })
+    } catch (err) {
+      setCancelStatus({ type: 'error', text: err.message })
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   const currentPlan = usage?.plan || 'free'
   const currentRank = PLAN_RANK[currentPlan] ?? 0
+  const isPaid = currentPlan !== 'free'
 
   let billingStatus = null
   if (checkoutStatus === 'activating') {
@@ -287,12 +316,17 @@ function SettingsPage() {
                   {!isLower && (
                     <button
                       type="button"
-                      onClick={() => startCheckout(plan.key, plan.name)}
-                      disabled={isCurrent || checkoutBusy}
+                      onClick={() => {
+                        setCancelStatus(null)
+                        startCheckout(plan.key, plan.name)
+                      }}
+                      disabled={isCurrent || isPaid || checkoutBusy}
                       className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCurrent
                         ? 'Current plan'
+                        : isPaid
+                          ? 'Cancel plan to switch'
                         : checkoutStatus === 'starting'
                           ? 'Opening...'
                           : `Upgrade to ${plan.name}`}
@@ -302,7 +336,51 @@ function SettingsPage() {
               )
             })}
           </div>
-          <StatusText status={billingStatus} />
+          {isPaid && !confirmingCancel && (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmingCancel(true)
+                setCancelStatus(null)
+              }}
+              className="inline-flex items-center rounded-lg border border-red-500/30 bg-red-500/[0.05] px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10"
+            >
+              Cancel plan
+            </button>
+          )}
+
+          {isPaid && confirmingCancel && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/[0.05] p-4">
+              <p className="text-sm font-medium text-zinc-100">
+                Cancel your {usage?.plan_name} plan?
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                You go back to the Free plan right away. The rest of this billing
+                month is not refunded. Your documents stay, but you can't upload
+                new ones until you are under the Free limit.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Yes, cancel plan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCancel(false)}
+                  disabled={cancelling}
+                  className="inline-flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Keep plan
+                </button>
+              </div>
+            </div>
+          )}
+
+          <StatusText status={cancelStatus || billingStatus} />
         </SectionCard>
       </div>
 

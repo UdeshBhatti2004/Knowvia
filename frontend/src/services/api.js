@@ -52,7 +52,20 @@ export async function createSubscription(plan) {
   if (response.status === 503) {
     throw new Error('Billing is not available yet.')
   }
+  if (response.status === 409) {
+    throw new Error('You already have a paid plan. Cancel it first.')
+  }
   if (!response.ok) throw new Error('Could not start the payment. Try again.')
+  return response.json()
+}
+
+export async function cancelSubscription() {
+  const response = await apiFetch(`${API_URL}/billing/cancel`, {
+    method: 'POST',
+  })
+  if (response.status === 404) throw new Error('No active subscription found.')
+  if (response.status === 503) throw new Error('Billing is not available yet.')
+  if (!response.ok) throw new Error('Could not cancel the plan. Try again.')
   return response.json()
 }
 

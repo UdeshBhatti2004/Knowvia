@@ -87,6 +87,10 @@ export function useCheckout() {
 
   return {
     startCheckout,
+    reset: () => {
+      setPhase('idle')
+      setError('')
+    },
     status,
     error,
     busy: status === 'starting' || status === 'activating',
