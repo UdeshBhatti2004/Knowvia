@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
 import AskPage from './pages/AskPage'
 import KnowledgeSourcesPage from './pages/KnowledgeSourcesPage'
@@ -9,31 +9,55 @@ import ConversationsPage from './pages/ConversationsPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 
+const AVAILABLE_PAGES = [
+  'Overview',
+  'Knowledge Sources',
+  'Uploaded Documents',
+  'Test Assistant',
+  'Conversations',
+  'Assistant Setup',
+  'Install',
+  'Settings',
+]
+
+// Page name <-> URL hash, e.g. 'Knowledge Sources' <-> '#knowledge-sources'
+function pageToHash(page) {
+  return '#' + page.toLowerCase().replace(/ /g, '-')
+}
+
+function pageFromHash() {
+  const hash = window.location.hash
+  const match = AVAILABLE_PAGES.find((page) => pageToHash(page) === hash)
+  return match || 'Overview'
+}
+
 function App() {
-  const [activePage, setActivePage] = useState('Overview')
+  const [activePage, setActivePage] = useState(pageFromHash)
   // A sample question picked on Overview, waiting for Test Assistant to use it.
   const [pendingQuestion, setPendingQuestion] = useState('')
 
-  function handleNavigate(page) {
-    const availablePages = [
-      'Overview',
-      'Knowledge Sources',
-      'Uploaded Documents',
-      'Test Assistant',
-      'Conversations',      
-      'Assistant Setup',
-      'Install',
-      'Settings',
-    ]
+  // Browser back/forward or a manual hash change updates the page.
+  useEffect(() => {
+    const onHashChange = () => setActivePage(pageFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
-    if (availablePages.includes(page)) {
-      setActivePage(page)
+  function goTo(page) {
+    setActivePage(page)
+    const hash = pageToHash(page)
+    if (window.location.hash !== hash) window.location.hash = hash
+  }
+
+  function handleNavigate(page) {
+    if (AVAILABLE_PAGES.includes(page)) {
+      goTo(page)
     }
   }
 
   function handleAskSample(question) {
     setPendingQuestion(question)
-    setActivePage('Test Assistant')
+    goTo('Test Assistant')
   }
 
   function renderPage() {
