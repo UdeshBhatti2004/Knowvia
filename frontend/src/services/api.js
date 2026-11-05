@@ -43,6 +43,19 @@ export async function getUsage() {
   return response.json()
 }
 
+export async function createSubscription(plan) {
+  const response = await apiFetch(`${API_URL}/billing/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
+  })
+  if (response.status === 503) {
+    throw new Error('Billing is not available yet.')
+  }
+  if (!response.ok) throw new Error('Could not start the payment. Try again.')
+  return response.json()
+}
+
 export async function updateWorkspace(name) {
   const response = await apiFetch(`${API_URL}/auth/workspace`, {
     method: 'PUT',

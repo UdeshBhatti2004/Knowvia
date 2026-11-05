@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react'
-import { Building2, User, Save, RotateCcw, KeyRound } from 'lucide-react'
+import {
+  Building2,
+  User,
+  Save,
+  RotateCcw,
+  KeyRound,
+  CreditCard,
+} from 'lucide-react'
 
 import { changePassword, updateWorkspace } from '../services/api'
 import { useMe, useRefreshMe } from '../hooks/useMe'
+import { useUsage } from '../hooks/useUsage'
+import { useCheckout } from '../hooks/useCheckout'
 import PasswordInput from '../components/PasswordInput'
 
 const inputClass =
   'w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:border-violet-500/60 focus:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60'
+
+// Display only. Real limits live in backend PLANS (config.py): keep in sync.
+const PLAN_OPTIONS = [
+  { key: 'starter', name: 'Starter', price: '₹499', documents: 20, questions: 1000 },
+  { key: 'pro', name: 'Pro', price: '₹999', documents: 50, questions: 5000 },
+]
+const PLAN_RANK = { free: 0, starter: 1, pro: 2 }
 
 function Field({ label, hint, children }) {
   return (
@@ -56,6 +72,13 @@ function Hint({ show, children }) {
 function SettingsPage() {
   const { data: me, isLoading: loading, isError } = useMe()
   const refreshMe = useRefreshMe()
+  const { data: usage } = useUsage()
+  const {
+    startCheckout,
+    status: checkoutStatus,
+    error: checkoutError,
+    busy: checkoutBusy,
+  } = useCheckout()
   const [name, setName] = useState(me?.workspace_name || '')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null) // { type: 'ok' | 'error', text }
@@ -134,6 +157,26 @@ function SettingsPage() {
 
   const clearPasswordStatus = () => setPasswordStatus(null)
 
+  const currentPlan = usage?.plan || 'free'
+  const currentRank = PLAN_RANK[currentPlan] ?? 0
+
+  let billingStatus = null
+  if (checkoutStatus === 'activating') {
+    billingStatus = {
+      type: 'ok',
+      text: 'Payment received. Activating your plan...',
+    }
+  } else if (checkoutStatus === 'done') {
+    billingStatus = { type: 'ok', text: 'Plan activated.' }
+  } else if (checkoutStatus === 'timeout') {
+    billingStatus = {
+      type: 'ok',
+      text: 'Payment received. Your plan has not updated yet. Refresh in a minute.',
+    }
+  } else if (checkoutError) {
+    billingStatus = { type: 'error', text: checkoutError }
+  }
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <div>
@@ -206,6 +249,62 @@ function SettingsPage() {
           <StatusText status={shownStatus} />
         </div>
       </form>
+
+      <div className="mt-5">
+        <SectionCard
+          icon={CreditCard}
+          title="Plan and billing"
+          description={`You are on the ${usage?.plan_name || 'Free'} plan.`}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {PLAN_OPTIONS.map((plan) => {
+              const isCurrent = currentPlan === plan.key
+              const isLower = PLAN_RANK[plan.key] < currentRank
+
+              return (
+                <div
+                  key={plan.key}
+                  className={`rounded-lg border p-4 ${
+                    isCurrent
+                      ? 'border-violet-500/40 bg-violet-500/[0.06]'
+                      : 'border-white/[0.08] bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {plan.name}
+                    </p>
+                    <p className="text-sm text-zinc-200">
+                      {plan.price}
+                      <span className="text-xs text-zinc-500">/month</span>
+                    </p>
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    {plan.documents} documents,{' '}
+                    {plan.questions.toLocaleString('en-IN')} questions per month
+                  </p>
+
+                  {!isLower && (
+                    <button
+                      type="button"
+                      onClick={() => startCheckout(plan.key, plan.name)}
+                      disabled={isCurrent || checkoutBusy}
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isCurrent
+                        ? 'Current plan'
+                        : checkoutStatus === 'starting'
+                          ? 'Opening...'
+                          : `Upgrade to ${plan.name}`}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <StatusText status={billingStatus} />
+        </SectionCard>
+      </div>
 
       <form
         onSubmit={handlePasswordChange}
