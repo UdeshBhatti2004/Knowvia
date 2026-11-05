@@ -12,6 +12,7 @@ def _col():
     col = _db.get_db()[COLLECTION]
     col.create_index("owner_id")
     col.create_index("widget_key", unique=True)
+    col.create_index("razorpay_subscription_id")
     return col
 
 
@@ -60,3 +61,16 @@ def mark_tested(workspace_id: str) -> None:
 def set_plan(workspace_id: str, plan: str) -> None:
     """Change a workspace's plan (used by billing later)."""
     _col().update_one({"_id": workspace_id}, {"$set": {"plan": plan}})
+
+
+def set_subscription(workspace_id: str, subscription_id: str) -> None:
+    """Remember the workspace's Razorpay subscription id."""
+    _col().update_one(
+        {"_id": workspace_id},
+        {"$set": {"razorpay_subscription_id": subscription_id}},
+    )
+
+
+def get_by_subscription_id(subscription_id: str) -> dict | None:
+    """Find the workspace that owns a Razorpay subscription (used by the webhook)."""
+    return _col().find_one({"razorpay_subscription_id": subscription_id})

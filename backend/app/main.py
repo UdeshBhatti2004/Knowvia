@@ -10,6 +10,7 @@ from app.api.routes.conversations import router as conversations_router
 from app.api.routes.ask import router as ask_router
 from app.api.routes.assistant import router as assistant_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.billing import router as billing_router
 from app.api.routes.public import router as public_router
 from app.api.routes.sources import router as sources_router
 from app.api.routes.usage import router as usage_router
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(public_router)
     app.include_router(widget_router)
+    app.include_router(billing_router)
 
     return app
 

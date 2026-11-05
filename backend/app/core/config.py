@@ -54,6 +54,11 @@ PLANS = {
         "max_documents": FREE_MAX_DOCUMENTS,
         "max_questions_per_month": FREE_MAX_QUESTIONS_PER_MONTH,
     },
+    "starter": {
+        "name": "Starter",
+        "max_documents": 20,
+        "max_questions_per_month": 1000,
+    },
     "pro": {
         "name": "Pro",
         "max_documents": 50,
@@ -61,6 +66,17 @@ PLANS = {
     },
 }
 
+
+# Razorpay billing. Without RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET the billing
+# routes return 503.
+# RAZORPAY_PLAN_ID_STARTER / RAZORPAY_PLAN_ID_PRO are the paid subscription
+# plan ids (start with plan_).
+# RAZORPAY_WEBHOOK_SECRET is the secret set on the webhook in the dashboard.
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_PLAN_ID_STARTER = os.getenv("RAZORPAY_PLAN_ID_STARTER")
+RAZORPAY_PLAN_ID_PRO = os.getenv("RAZORPAY_PLAN_ID_PRO")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
 
 # Login tokens are signed with AUTH_SECRET (without it, login and signup return 503).
 AUTH_SECRET = os.getenv("AUTH_SECRET")
