@@ -28,6 +28,17 @@ const PLAN_OPTIONS = [
 ]
 const PLAN_RANK = { free: 0, starter: 1, pro: 2 }
 
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 function Field({ label, hint, children }) {
   return (
     <label className="block">
@@ -170,13 +181,16 @@ function SettingsPage() {
     setCancelling(true)
     setCancelStatus(null)
     try {
-      await cancelSubscription()
+      const result = await cancelSubscription()
       resetCheckout()
       refreshUsage()
       setConfirmingCancel(false)
+      const endDate = formatDate(result?.plan_ends_at)
       setCancelStatus({
         type: 'ok',
-        text: 'Plan cancelled. You are on the Free plan.',
+        text: endDate
+          ? `Plan cancelled. It stays active until ${endDate}.`
+          : 'Plan cancelled. You are on the Free plan.',
       })
     } catch (err) {
       setCancelStatus({ type: 'error', text: err.message })
@@ -188,6 +202,8 @@ function SettingsPage() {
   const currentPlan = usage?.plan || 'free'
   const currentRank = PLAN_RANK[currentPlan] ?? 0
   const isPaid = currentPlan !== 'free'
+  const planEndsAt = isPaid ? formatDate(usage?.plan_ends_at) : ''
+  const endingSoon = Boolean(planEndsAt)
 
   let billingStatus = null
   if (checkoutStatus === 'activating') {
@@ -326,7 +342,9 @@ function SettingsPage() {
                       {isCurrent
                         ? 'Current plan'
                         : isPaid
-                          ? 'Cancel plan to switch'
+                          ? endingSoon
+                            ? 'Available after your plan ends'
+                            : 'Cancel plan to switch'
                         : checkoutStatus === 'starting'
                           ? 'Opening...'
                           : `Upgrade to ${plan.name}`}
@@ -336,7 +354,19 @@ function SettingsPage() {
               )
             })}
           </div>
-          {isPaid && !confirmingCancel && (
+          {isPaid && endingSoon && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.05] p-4">
+              <p className="text-sm font-medium text-zinc-100">
+                Your {usage?.plan_name} plan ends on {planEndsAt}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                You keep full access until then, then move to the Free plan.
+                You can subscribe again after that date.
+              </p>
+            </div>
+          )}
+
+          {isPaid && !endingSoon && !confirmingCancel && (
             <button
               type="button"
               onClick={() => {
@@ -355,9 +385,9 @@ function SettingsPage() {
                 Cancel your {usage?.plan_name} plan?
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                You go back to the Free plan right away. The rest of this billing
-                month is not refunded. Your documents stay, but you can't upload
-                new ones until you are under the Free limit.
+                Your plan stays active until the end of the current billing
+                period, then you move to Free. No refund. Your documents stay,
+                but you can't upload new ones until you are under the Free limit.
               </p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <button

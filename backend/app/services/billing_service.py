@@ -1,10 +1,12 @@
 import hashlib
 import hmac
+from datetime import datetime, timezone
 
 import httpx
 
 from app.core import config
 from app.repositories import workspace_repository
+from app.services import usage_service
 
 RAZORPAY_API = "https://api.razorpay.com/v1"
 
@@ -61,8 +63,7 @@ def create_subscription(workspace_id: str, plan_key: str) -> dict:
     ):
         raise BillingNotConfigured()
 
-    workspace = workspace_repository.get_by_id(workspace_id)
-    if workspace and workspace.get("plan", config.DEFAULT_PLAN) != config.DEFAULT_PLAN:
+    if usage_service.get_plan_key(workspace_id) != config.DEFAULT_PLAN:
         raise AlreadySubscribed()
 
     try:
@@ -97,23 +98,34 @@ def create_subscription(workspace_id: str, plan_key: str) -> dict:
     }
 
 
-def cancel_subscription(workspace_id: str) -> None:
-    """Cancel the workspace's Razorpay subscription and drop it to the free plan."""
+def cancel_subscription(workspace_id: str) -> str | None:
+    """Cancel at the end of the paid period. Returns the end date (ISO).
+
+    The plan stays active until then. If Razorpay gives no period end, the
+    plan drops to free right away (returns None).
+    """
     if not config.RAZORPAY_KEY_ID or not config.RAZORPAY_KEY_SECRET:
         raise BillingNotConfigured()
 
     workspace = workspace_repository.get_by_id(workspace_id)
     subscription_id = (workspace or {}).get("razorpay_subscription_id")
-    plan = (workspace or {}).get("plan", config.DEFAULT_PLAN)
 
-    if not subscription_id or plan == config.DEFAULT_PLAN:
+    if (
+        not subscription_id
+        or usage_service.get_plan_key(workspace_id) == config.DEFAULT_PLAN
+    ):
         raise NoSubscription()
+
+    # Already scheduled: answer again with the same date, no second call.
+    already = (workspace or {}).get("plan_ends_at")
+    if already:
+        return already
 
     try:
         response = httpx.post(
             f"{RAZORPAY_API}/subscriptions/{subscription_id}/cancel",
             auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET),
-            json={"cancel_at_cycle_end": 0},
+            json={"cancel_at_cycle_end": 1},
             timeout=15,
         )
     except httpx.HTTPError as exc:
@@ -124,7 +136,14 @@ def cancel_subscription(workspace_id: str) -> None:
         print(f"Razorpay cancel error {response.status_code}: {response.text}")
         raise BillingError()
 
-    workspace_repository.set_plan(workspace_id, config.DEFAULT_PLAN)
+    current_end = response.json().get("current_end")
+    if not current_end:
+        workspace_repository.set_plan(workspace_id, config.DEFAULT_PLAN)
+        return None
+
+    ends_at = datetime.fromtimestamp(int(current_end), tz=timezone.utc).isoformat()
+    workspace_repository.set_plan_ends_at(workspace_id, ends_at)
+    return ends_at
 
 
 def verify_signature(body: bytes, signature: str | None) -> bool:
@@ -167,4 +186,11 @@ def handle_event(event: dict) -> None:
             return
         workspace_repository.set_plan(workspace["_id"], plan_key)
     else:
+        # A scheduled cancel keeps the plan until the paid period ends.
+        # usage_service drops it to free once plan_ends_at has passed.
+        if (
+            workspace.get("plan_ends_at")
+            and usage_service.get_plan_key(workspace["_id"]) != config.DEFAULT_PLAN
+        ):
+            return
         workspace_repository.set_plan(workspace["_id"], config.DEFAULT_PLAN)

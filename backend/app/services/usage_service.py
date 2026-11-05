@@ -14,6 +14,27 @@ def _month_start_iso() -> str:
     ).isoformat()
 
 
+def _is_past(iso: str | None) -> bool:
+    if not iso:
+        return False
+    try:
+        moment = datetime.fromisoformat(iso)
+    except ValueError:
+        return False
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment <= datetime.now(timezone.utc)
+
+
+def get_plan_ends_at(workspace_id: str) -> str | None:
+    try:
+        doc = workspace_repository.get_by_id(workspace_id)
+    except Exception as exc:
+        print(f"Could not read plan end date: {exc}")
+        return None
+    return (doc or {}).get("plan_ends_at")
+
+
 def get_plan_key(workspace_id: str) -> str:
     """The workspace's plan. Falls back to the default if missing or unknown."""
     try:
@@ -23,7 +44,11 @@ def get_plan_key(workspace_id: str) -> str:
         return DEFAULT_PLAN
 
     plan = (doc or {}).get("plan")
-    return plan if plan in PLANS else DEFAULT_PLAN
+    if plan not in PLANS:
+        return DEFAULT_PLAN
+    if _is_past((doc or {}).get("plan_ends_at")):
+        return DEFAULT_PLAN
+    return plan
 
 
 def get_limits(workspace_id: str) -> dict:
@@ -44,7 +69,7 @@ def count_questions_this_month(workspace_id: str) -> int:
 def get_usage(workspace_id: str) -> dict:
     plan_key = get_plan_key(workspace_id)
     plan = PLANS[plan_key]
-    return {
+    usage = {
         "plan": plan_key,
         "plan_name": plan["name"],
         "documents": count_documents(workspace_id),
@@ -52,6 +77,13 @@ def get_usage(workspace_id: str) -> dict:
         "questions": count_questions_this_month(workspace_id),
         "questions_limit": plan["max_questions_per_month"],
     }
+
+    if plan_key != DEFAULT_PLAN:
+        ends_at = get_plan_ends_at(workspace_id)
+        if ends_at:
+            usage["plan_ends_at"] = ends_at
+
+    return usage
 
 
 def check_can_upload(workspace_id: str) -> None:

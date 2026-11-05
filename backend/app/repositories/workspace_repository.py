@@ -59,8 +59,18 @@ def mark_tested(workspace_id: str) -> None:
 
 
 def set_plan(workspace_id: str, plan: str) -> None:
-    """Change a workspace's plan (used by billing later)."""
-    _col().update_one({"_id": workspace_id}, {"$set": {"plan": plan}})
+    """Change a workspace's plan. Also clears any scheduled end date."""
+    _col().update_one(
+        {"_id": workspace_id},
+        {"$set": {"plan": plan}, "$unset": {"plan_ends_at": ""}},
+    )
+
+
+def set_plan_ends_at(workspace_id: str, ends_at_iso: str) -> None:
+    """The paid plan stays active until this time (cancel at period end)."""
+    _col().update_one(
+        {"_id": workspace_id}, {"$set": {"plan_ends_at": ends_at_iso}}
+    )
 
 
 def set_subscription(workspace_id: str, subscription_id: str) -> None:

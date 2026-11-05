@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import json
-
+from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +10,7 @@ from app.api.auth import require_user
 from app.core import config
 from app.main import app
 from app.repositories import workspace_repository
-from app.services import billing_service
+from app.services import billing_service, usage_service
 
 client = TestClient(app)
 
@@ -274,23 +274,19 @@ def test_subscribe_blocked_when_already_on_paid_plan(monkeypatch):
     assert plan_of(ws_id) == "starter"
 
 
-def test_cancel_success_calls_razorpay_and_sets_free(monkeypatch):
-    sent = {}
-
-    def fake_post(url, **kwargs):
-        sent["url"] = url
-        sent["json"] = kwargs["json"]
-        return FakeResponse(200, {"id": "sub_1", "status": "cancelled"})
-
-    monkeypatch.setattr(billing_service.httpx, "post", fake_post)
+def test_cancel_without_period_end_falls_back_to_free(monkeypatch):
+    monkeypatch.setattr(
+        billing_service.httpx,
+        "post",
+        lambda url, **kw: FakeResponse(200, {"id": "sub_1", "status": "cancelled"}),
+    )
 
     ws_id = make_workspace(plan="pro", subscription_id="sub_1")
     login_as(ws_id)
     res = client.post("/billing/cancel")
 
     assert res.status_code == 200
-    assert sent["url"].endswith("/subscriptions/sub_1/cancel")
-    assert sent["json"] == {"cancel_at_cycle_end": 0}
+    assert res.json()["plan_ends_at"] is None
     assert plan_of(ws_id) == "free"
 
 
@@ -327,3 +323,142 @@ def test_cancel_razorpay_error_keeps_plan(monkeypatch):
     res = client.post("/billing/cancel")
     assert res.status_code == 502
     assert plan_of(ws_id) == "pro"
+
+
+
+
+# ---- cancel at period end ----
+
+
+def iso_in(days):
+    return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+
+def test_cancel_schedules_end_of_period(monkeypatch):
+    ends = datetime.now(timezone.utc) + timedelta(days=20)
+    sent = {}
+
+    def fake_post(url, **kwargs):
+        sent["url"] = url
+        sent["json"] = kwargs["json"]
+        return FakeResponse(
+            200,
+            {"id": "sub_1", "status": "active", "current_end": int(ends.timestamp())},
+        )
+
+    monkeypatch.setattr(billing_service.httpx, "post", fake_post)
+
+    ws_id = make_workspace(plan="pro", subscription_id="sub_1")
+    login_as(ws_id)
+    res = client.post("/billing/cancel")
+
+    expected = datetime.fromtimestamp(
+        int(ends.timestamp()), tz=timezone.utc
+    ).isoformat()
+
+    assert res.status_code == 200
+    assert sent["url"].endswith("/subscriptions/sub_1/cancel")
+    assert sent["json"] == {"cancel_at_cycle_end": 1}
+    assert res.json()["plan_ends_at"] == expected
+    assert plan_of(ws_id) == "pro"
+    assert workspace_repository.get_by_id(ws_id)["plan_ends_at"] == expected
+    assert usage_service.get_plan_key(ws_id) == "pro"
+
+
+def test_cancel_twice_does_not_call_razorpay_again(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_post(url, **kwargs):
+        calls["n"] += 1
+        return FakeResponse(
+            200,
+            {
+                "id": "sub_1",
+                "status": "active",
+                "current_end": int((datetime.now(timezone.utc) + timedelta(days=9)).timestamp()),
+            },
+        )
+
+    monkeypatch.setattr(billing_service.httpx, "post", fake_post)
+
+    ws_id = make_workspace(plan="pro", subscription_id="sub_1")
+    login_as(ws_id)
+    first = client.post("/billing/cancel")
+    second = client.post("/billing/cancel")
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json()["plan_ends_at"] == second.json()["plan_ends_at"]
+    assert calls["n"] == 1
+
+
+def test_expired_plan_counts_as_free_and_future_stays_paid():
+    past_id = make_workspace(plan="pro")
+    workspace_repository.set_plan_ends_at(past_id, iso_in(-1))
+    assert usage_service.get_plan_key(past_id) == "free"
+
+    future_id = make_workspace(plan="pro")
+    workspace_repository.set_plan_ends_at(future_id, iso_in(10))
+    assert usage_service.get_plan_key(future_id) == "pro"
+
+
+def test_webhook_cancelled_ignored_before_period_end():
+    ws_id = make_workspace(plan="pro")
+    workspace_repository.set_plan_ends_at(ws_id, iso_in(10))
+    res = post_webhook(make_event("subscription.cancelled"))
+    assert res.status_code == 200
+    assert plan_of(ws_id) == "pro"
+
+
+def test_webhook_cancelled_applies_after_period_end():
+    ws_id = make_workspace(plan="pro")
+    workspace_repository.set_plan_ends_at(ws_id, iso_in(-1))
+    res = post_webhook(make_event("subscription.cancelled"))
+    assert res.status_code == 200
+    saved = workspace_repository.get_by_id(ws_id)
+    assert saved["plan"] == "free"
+    assert "plan_ends_at" not in saved
+
+
+def test_webhook_halted_drops_plan_even_without_end_date():
+    ws_id = make_workspace(plan="pro")
+    res = post_webhook(make_event("subscription.halted"))
+    assert res.status_code == 200
+    assert plan_of(ws_id) == "free"
+
+
+def test_webhook_activated_clears_scheduled_end():
+    ws_id = make_workspace(plan="starter")
+    workspace_repository.set_plan_ends_at(ws_id, iso_in(5))
+    res = post_webhook(make_event("subscription.activated", plan_id="plan_pro_fake"))
+    assert res.status_code == 200
+    saved = workspace_repository.get_by_id(ws_id)
+    assert saved["plan"] == "pro"
+    assert "plan_ends_at" not in saved
+
+
+def test_subscribe_allowed_after_paid_plan_expired(monkeypatch):
+    monkeypatch.setattr(
+        billing_service.httpx,
+        "post",
+        lambda url, **kw: FakeResponse(200, {"id": "sub_new"}),
+    )
+    ws_id = make_workspace(plan="pro", subscription_id="sub_old")
+    workspace_repository.set_plan_ends_at(ws_id, iso_in(-1))
+    login_as(ws_id)
+    res = client.post("/billing/subscribe", json={"plan": "pro"})
+    assert res.status_code == 200
+    assert res.json()["subscription_id"] == "sub_new"
+
+
+def test_usage_reports_plan_ends_at_only_when_set(monkeypatch):
+    monkeypatch.setattr(usage_service, "count_documents", lambda w: 0)
+    monkeypatch.setattr(usage_service, "count_questions_this_month", lambda w: 0)
+
+    free_id = make_workspace(subscription_id=None)
+    assert "plan_ends_at" not in usage_service.get_usage(free_id)
+
+    paid_id = make_workspace(plan="pro")
+    ends = iso_in(10)
+    workspace_repository.set_plan_ends_at(paid_id, ends)
+    assert usage_service.get_usage(paid_id)["plan_ends_at"] == ends
+    

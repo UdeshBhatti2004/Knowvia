@@ -38,7 +38,7 @@ def subscribe_route(
 @router.post("/cancel")
 def cancel_route(workspace_id: str = Depends(require_user)):
     try:
-        billing_service.cancel_subscription(workspace_id)
+        ends_at = billing_service.cancel_subscription(workspace_id)
     except billing_service.BillingNotConfigured:
         raise HTTPException(status_code=503, detail="Billing is not configured.")
     except billing_service.NoSubscription:
@@ -49,7 +49,7 @@ def cancel_route(workspace_id: str = Depends(require_user)):
             detail="Could not cancel the subscription. Try again.",
         )
 
-    return {"ok": True}
+    return {"ok": True, "plan_ends_at": ends_at}
 
 
 @router.post("/webhook")
