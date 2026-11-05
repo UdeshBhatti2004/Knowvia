@@ -78,7 +78,7 @@ function Sidebar({
   const hideWhenCollapsed = isCollapsed ? 'lg:hidden' : ''
 
   const navButtonClass = (active) =>
-    `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13px] outline-none transition focus-visible:ring-2 focus-visible:ring-violet-500/60 ${
+    `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] outline-none transition focus-visible:ring-2 focus-visible:ring-violet-500/60 ${
       isCollapsed ? 'lg:justify-center lg:gap-0 lg:px-1' : ''
     } ${
       active
@@ -108,7 +108,7 @@ function Sidebar({
       >
         {/* Header */}
         <div
-          className={`flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-3${
+          className={`flex h-12 shrink-0 items-center justify-between border-b border-white/[0.07] px-3 ${
             isCollapsed ? 'lg:justify-center lg:px-1' : ''
           }`}
         >
@@ -146,7 +146,7 @@ function Sidebar({
         </div>
 
         {/* Workspace tile */}
-        <div className="shrink-0 p-2.5">
+        <div className="shrink-0 px-2.5 py-2">
           <div
             title={isCollapsed ? workspaceName : undefined}
             className={`flex w-full items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2 ${
@@ -167,9 +167,9 @@ function Sidebar({
         </div>
 
         {/* Nav */}
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <p
-            className={`mb-2 px-2 text-[10px] font-medium tracking-widest text-zinc-600 ${hideWhenCollapsed}`}
+            className={`mb-1 px-2 text-[10px] font-medium tracking-widest text-zinc-600 ${hideWhenCollapsed}`}
           >
             WORKSPACE
           </p>
@@ -194,10 +194,10 @@ function Sidebar({
         </nav>
 
         {/* Footer */}
-        <div className="mt-auto shrink-0 border-t border-white/[0.07] p-2.5">
+        <div className="mt-auto shrink-0 border-t border-white/[0.07] p-2">
           {usage && (
             <div
-              className={`mb-2 space-y-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2.5 ${hideWhenCollapsed}`}
+              className={`mb-2 space-y-2 rounded-lg border border-white/[0.07] bg-white/[0.02] p-2 ${hideWhenCollapsed}`}
             >
               <p className="text-[10px] font-medium tracking-widest text-zinc-600">
                 {(usage.plan_name || 'Free').toUpperCase()} PLAN USAGE
@@ -227,7 +227,7 @@ function Sidebar({
           </button>
 
           <div
-            className={`mt-2 flex items-center gap-2 rounded-lg p-1 ${
+            className={`mt-1 flex items-center gap-2 rounded-lg p-1 ${
               isCollapsed ? 'lg:flex-col lg:gap-2 lg:px-0' : ''
             }`}
           >

@@ -134,7 +134,7 @@ function InstallPage() {
         </p>
       </div>
 
-      <div className="mt-6 flex w-full flex-col gap-5 xl:w-3/4">
+      <div className="mt-6 grid w-full grid-cols-1 gap-5 xl:grid-cols-3">
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-300">

@@ -254,9 +254,9 @@ function KnowledgeSourcesPage({ onNavigate }) {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Upload area */}
-        <div className="min-w-0 lg:col-span-2">
+        <div className="flex min-w-0 flex-col lg:col-span-2">
           {selectedFile ? (
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
               <p className="text-xs text-zinc-500">Ready to upload</p>
@@ -320,7 +320,7 @@ function KnowledgeSourcesPage({ onNavigate }) {
                 }
               }}
               onDrop={handleDrop}
-              className={`flex flex-col items-center rounded-xl border border-dashed px-5 py-12 text-center outline-none transition-colors focus-visible:border-violet-400 sm:py-16 ${
+              className={`flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed px-5 py-12 text-center outline-none transition-colors focus-visible:border-violet-400 sm:py-16 ${
                 limitReached
                   ? 'cursor-not-allowed border-white/10 bg-white/[0.015] opacity-50'
                   : isDragging
