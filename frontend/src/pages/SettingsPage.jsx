@@ -206,7 +206,9 @@ function SettingsPage() {
   const endingSoon = Boolean(planEndsAt)
 
   let billingStatus = null
-  if (checkoutStatus === 'activating') {
+  if (isPaid && ['activating', 'timeout', 'done'].includes(checkoutStatus)) {
+    billingStatus = { type: 'ok', text: 'Plan activated.' }
+  } else if (checkoutStatus === 'activating') {
     billingStatus = {
       type: 'ok',
       text: 'Payment received. Activating your plan...',

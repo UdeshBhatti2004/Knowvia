@@ -6,7 +6,7 @@ import { USAGE_KEY, useUsage } from './useUsage'
 
 const CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 const POLL_MS = 3000
-const MAX_POLLS = 20
+const MAX_POLLS = 60
 
 function loadCheckoutScript() {
   if (window.Razorpay) return Promise.resolve()
@@ -31,7 +31,9 @@ export function useCheckout() {
   const [targetPlan, setTargetPlan] = useState(null)
   const [error, setError] = useState('')
 
-  const activated = phase === 'activating' && usage?.plan === targetPlan
+  const activated =
+    (phase === 'activating' || phase === 'timeout') &&
+    usage?.plan === targetPlan
   const status = activated ? 'done' : phase
 
   useEffect(() => {
